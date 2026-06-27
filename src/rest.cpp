@@ -684,4 +684,80 @@ rest_client::Response rest_client::complete_onboarding(const std::string& userna
     return post("/onboard/complete", body);
 }
 
+rest_client::Response rest_client::execute_webhook_with_token(const std::string& webhook_id, const std::string& token, const models::WebhookExecutePayload& payload) {
+    return post("/webhooks/" + webhook_id + "/" + token, payload.to_json());
+}
+
+rest_client::Response rest_client::get_webhook_with_token(const std::string& webhook_id, const std::string& token) {
+    return get("/webhooks/" + webhook_id + "/" + token);
+}
+
+rest_client::Response rest_client::edit_webhook_with_token(const std::string& webhook_id, const std::string& token, const nlohmann::json& fields) {
+    return patch("/webhooks/" + webhook_id + "/" + token, fields);
+}
+
+rest_client::Response rest_client::delete_webhook_with_token(const std::string& webhook_id, const std::string& token) {
+    return del("/webhooks/" + webhook_id + "/" + token);
+}
+
+rest_client::Response rest_client::edit_webhook_message(const std::string& webhook_id, const std::string& token, const std::string& message_id, const nlohmann::json& fields) {
+    return patch("/webhooks/" + webhook_id + "/" + token + "/" + message_id, fields);
+}
+
+rest_client::Response rest_client::delete_webhook_message(const std::string& webhook_id, const std::string& token, const std::string& message_id) {
+    return del("/webhooks/" + webhook_id + "/" + token + "/" + message_id);
+}
+
+rest_client::Response rest_client::execute_github_webhook(const std::string& webhook_id, const std::string& token, const nlohmann::json& payload) {
+    return post("/webhooks/" + webhook_id + "/" + token + "/github", payload);
+}
+
+rest_client::Response rest_client::add_reaction(const std::string& channel_id, const std::string& message_id, const std::string& emoji) {
+    return put("/channels/" + channel_id + "/messages/" + message_id + "/reactions/" + url_encode(emoji));
+}
+
+rest_client::Response rest_client::set_channel_default_permission(const std::string& channel_id, int64_t permissions) {
+    nlohmann::json body;
+    body["permissions"] = permissions;
+    return put("/channels/" + channel_id + "/permissions/default", body);
+}
+
+rest_client::Response rest_client::get_user_flags(const std::string& user_id) {
+    return get("/users/" + user_id + "/flags");
+}
+
+rest_client::Response rest_client::change_username(const std::string& username, const std::optional<std::string>& password) {
+    nlohmann::json body;
+    body["username"] = username;
+    if (password) body["password"] = *password;
+    return patch("/users/@me/username", body);
+}
+
+rest_client::Response rest_client::create_group(const std::string& name, const std::vector<std::string>& users) {
+    nlohmann::json body;
+    body["name"] = name;
+    body["users"] = users;
+    return post("/channels/create", body);
+}
+
+rest_client::Response rest_client::get_group_members(const std::string& channel_id) {
+    return get("/channels/" + channel_id + "/members");
+}
+
+rest_client::Response rest_client::join_voice_call(const std::string& channel_id) {
+    return post("/channels/" + channel_id + "/join_call");
+}
+
+rest_client::Response rest_client::end_voice_ring(const std::string& channel_id, const std::string& user_id) {
+    return put("/channels/" + channel_id + "/end_ring/" + user_id);
+}
+
+rest_client::Response rest_client::get_owned_bots() {
+    return get("/bots/@me");
+}
+
+rest_client::Response rest_client::get_bot_invite_info(const std::string& bot_id) {
+    return get("/bots/" + bot_id + "/invite");
+}
+
 } // namespace stoatpp

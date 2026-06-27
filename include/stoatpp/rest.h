@@ -60,6 +60,13 @@ public:
     Response edit_webhook(const std::string& webhook_id, const nlohmann::json& fields);
     Response delete_webhook(const std::string& webhook_id);
     Response execute_webhook(const std::string& webhook_id, const std::string& webhook_token, const models::WebhookExecutePayload& payload);
+    Response execute_webhook_with_token(const std::string& webhook_id, const std::string& token, const models::WebhookExecutePayload& payload);
+    Response get_webhook_with_token(const std::string& webhook_id, const std::string& token);
+    Response edit_webhook_with_token(const std::string& webhook_id, const std::string& token, const nlohmann::json& fields);
+    Response delete_webhook_with_token(const std::string& webhook_id, const std::string& token);
+    Response edit_webhook_message(const std::string& webhook_id, const std::string& token, const std::string& message_id, const nlohmann::json& fields);
+    Response delete_webhook_message(const std::string& webhook_id, const std::string& token, const std::string& message_id);
+    Response execute_github_webhook(const std::string& webhook_id, const std::string& token, const nlohmann::json& payload);
 
     Response get_attachment_metadata(const std::string& attachment_id);
 
@@ -72,6 +79,7 @@ public:
     Response get_message(const std::string& channel_id, const std::string& message_id);
     Response search_messages(const std::string& channel_id, const models::MessageSearchQuery& query);
     Response delete_messages_bulk(const std::string& channel_id, const std::vector<std::string>& message_ids);
+    Response add_reaction(const std::string& channel_id, const std::string& message_id, const std::string& emoji);
     Response remove_reaction(const std::string& channel_id, const std::string& message_id, const std::string& emoji, const std::optional<std::string>& user_id = {});
     Response get_pinned_messages(const std::string& channel_id);
     Response pin_message(const std::string& channel_id, const std::string& message_id);
@@ -109,6 +117,7 @@ public:
     Response get_channel_permissions(const std::string& channel_id);
     Response set_channel_permission(const std::string& channel_id, const std::string& role_id, int64_t allow_mask, int64_t deny_mask);
     Response delete_channel_permission(const std::string& channel_id, const std::string& role_id);
+    Response set_channel_default_permission(const std::string& channel_id, int64_t permissions);
     Response add_group_recipient(const std::string& channel_id, const std::string& user_id);
     Response remove_group_recipient(const std::string& channel_id, const std::string& user_id);
 
@@ -116,6 +125,8 @@ public:
     Response get_user(const std::string& user_id);
     Response get_user_profile(const std::string& user_id);
     Response get_user_default_avatar(const std::string& user_id);
+    Response get_user_flags(const std::string& user_id);
+    Response change_username(const std::string& username, const std::optional<std::string>& password = {});
     Response get_mutual_friends_and_servers(const std::string& user_id);
     Response edit_current_user(const nlohmann::json& fields);
     Response get_relationships();
@@ -150,6 +161,10 @@ public:
     Response get_active_dms();
     Response open_dm(const std::string& user_id);
     Response get_voice_call_info(const std::string& channel_id);
+    Response create_group(const std::string& name, const std::vector<std::string>& users = {});
+    Response get_group_members(const std::string& channel_id);
+    Response join_voice_call(const std::string& channel_id);
+    Response end_voice_ring(const std::string& channel_id, const std::string& user_id);
 
     // 9. Custom Bot Management
     Response create_bot(const std::string& name);
@@ -157,6 +172,8 @@ public:
     Response edit_bot(const std::string& bot_id, const nlohmann::json& fields);
     Response delete_bot(const std::string& bot_id);
     Response invite_bot(const std::string& bot_id, const std::string& server_id, const std::string& channel_id);
+    Response get_owned_bots();
+    Response get_bot_invite_info(const std::string& bot_id);
 
     // 10. Invites & Onboarding
     Response get_invite(const std::string& invite_code);

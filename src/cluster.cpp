@@ -335,8 +335,7 @@ void cluster::react_to_message(const std::string& channel_id,
                                std::function<void(bool)> callback) {
     std::thread([this, channel_id, message_id, emoji_id, callback]() {
         try {
-            std::string path = "/channels/" + channel_id + "/messages/" + message_id + "/reactions/" + url_encode(emoji_id);
-            auto res = rest_.put(path);
+            auto res = rest_.add_reaction(channel_id, message_id, emoji_id);
             if (callback) callback(res.success());
         } catch (const std::exception& e) {
             utils::logger::log(LogLevel::ERROR, "Exception in react_to_message: " + std::string(e.what()), config_);
