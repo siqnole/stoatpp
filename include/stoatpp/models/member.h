@@ -24,16 +24,20 @@ inline Member Member::from_json(const nlohmann::json& j) {
     Member m;
     m.raw = j;
     
-    if (j.contains("id")) {
-        if (j["id"].is_object()) {
-            if (j["id"].contains("user") && j["id"]["user"].is_string()) {
-                m.id = j["id"]["user"].get<std::string>();
+    nlohmann::json id_val;
+    if (j.contains("id")) id_val = j["id"];
+    else if (j.contains("_id")) id_val = j["_id"];
+
+    if (!id_val.is_null()) {
+        if (id_val.is_object()) {
+            if (id_val.contains("user") && id_val["user"].is_string()) {
+                m.id = id_val["user"].get<std::string>();
             }
-            if (j["id"].contains("server") && j["id"]["server"].is_string()) {
-                m.server_id = j["id"]["server"].get<std::string>();
+            if (id_val.contains("server") && id_val["server"].is_string()) {
+                m.server_id = id_val["server"].get<std::string>();
             }
-        } else if (j["id"].is_string()) {
-            m.id = j["id"].get<std::string>();
+        } else if (id_val.is_string()) {
+            m.id = id_val.get<std::string>();
         }
     }
     
