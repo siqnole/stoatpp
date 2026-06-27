@@ -77,6 +77,10 @@ struct ClientConfig {
 
     // --- Extension Hooks ---
     std::function<std::unique_ptr<IHttpClient>()> http_client_factory = nullptr;
+
+    // --- Built-in Help Command ---
+    bool enable_default_help = true;
+    std::string default_help_color = "#5865f2";
 };
 
 } // namespace stoatpp

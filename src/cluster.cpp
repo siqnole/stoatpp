@@ -5,6 +5,7 @@
 #include <thread>
 #include <chrono>
 #include <iomanip>
+#include <algorithm>
 
 namespace stoatpp {
 
@@ -27,6 +28,29 @@ cluster::cluster(const std::string& token, ClientConfig config)
       rest_(token, config),
       dispatcher_(),
       gateway_(token, config, dispatcher_) {
+
+    if (config_.enable_default_help) {
+        register_command("help", [this](cluster& bot, const events::Message& msg, const std::vector<std::string>& args) {
+            stoatpp::models::MessagePayload payload;
+            nlohmann::json embed = nlohmann::json::object();
+            embed["title"] = "stoat++ default help menu";
+            embed["colour"] = config_.default_help_color;
+
+            std::string desc = "here is a list of all registered commands:\n";
+            std::vector<std::string> names;
+            for (const auto& [name, cb] : commands_) {
+                names.push_back(name);
+            }
+            std::sort(names.begin(), names.end());
+
+            for (const auto& name : names) {
+                desc += "• `" + config_.command_prefix + name + "`\n";
+            }
+            embed["description"] = desc;
+            payload.embeds.push_back(embed);
+            bot.send_message(msg.channel_id, payload);
+        });
+    }
 
     // 1. Automatic prefix-based command routing
     this->on_message([this](const events::Message& msg) {
