@@ -24,6 +24,7 @@ public:
     void begin_typing(const std::string& channel_id);
     void end_typing(const std::string& channel_id);
     void subscribe(const std::string& server_id);
+    int64_t ping_latency() const;
 
 private:
     void on_message_received(const std::string& raw);

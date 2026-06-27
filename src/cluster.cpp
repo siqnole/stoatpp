@@ -16,9 +16,10 @@ cluster::cluster(const std::string& token, ClientConfig config)
 
     // 1. Automatic prefix-based command routing
     this->on_message([this](const events::Message& msg) {
-        if (msg.content.empty() || msg.content[0] != '!') return;
+        const std::string& prefix = config_.command_prefix;
+        if (msg.content.rfind(prefix, 0) != 0) return;
 
-        std::stringstream ss(msg.content.substr(1));
+        std::stringstream ss(msg.content.substr(prefix.size()));
         std::string cmd;
         ss >> cmd;
 
@@ -304,6 +305,10 @@ models::User cluster::current_user() const {
 
 const ClientConfig& cluster::config() const {
     return config_;
+}
+
+int64_t cluster::ping_latency() const {
+    return gateway_.ping_latency();
 }
 
 void cluster::use(std::unique_ptr<bot_module> module) {

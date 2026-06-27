@@ -84,6 +84,7 @@ public:
 
     models::User current_user() const;
     const ClientConfig& config() const;
+    int64_t ping_latency() const;
 
     // Cog modules and Commands APIs
     void use(std::unique_ptr<bot_module> module);

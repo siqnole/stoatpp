@@ -68,6 +68,9 @@ struct ClientConfig {
     // --- Custom HTTP headers ---
     std::map<std::string, std::string> extra_headers = {};
 
+    // --- Command prefix (like discord.py) ---
+    std::string command_prefix = "!";
+
     // --- Intents / Subscriptions (future-proofing) ---
     bool subscribe_to_user_updates = false;
 

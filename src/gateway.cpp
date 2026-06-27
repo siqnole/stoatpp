@@ -16,6 +16,7 @@ struct gateway::impl {
     std::condition_variable ping_cv;
     std::mutex ping_mutex;
     std::atomic<bool> authenticated{false};
+    std::atomic<int64_t> latency_ms{0};
 };
 
 gateway::gateway(const std::string& token, const ClientConfig& config,
@@ -203,6 +204,14 @@ void gateway::handle_event(const nlohmann::json& j) {
     }
     
     if (type == "Pong") {
+        if (j.contains("data") && j["data"].is_number()) {
+            auto pong_time = j["data"].get<int64_t>();
+            auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::system_clock::now().time_since_epoch()
+            ).count();
+            pimpl_->latency_ms = now_ms - pong_time;
+            utils::logger::log(LogLevel::DEBUG, "Gateway heartbeat latency updated: " + std::to_string(pimpl_->latency_ms.load()) + "ms", config_);
+        }
         return;
     }
     
@@ -427,6 +436,10 @@ void gateway::handle_event(const nlohmann::json& j) {
         dispatcher_.dispatch_channel_stop_typing(ev);
         return;
     }
+}
+
+int64_t gateway::ping_latency() const {
+    return pimpl_->latency_ms.load();
 }
 
 } // namespace stoatpp
