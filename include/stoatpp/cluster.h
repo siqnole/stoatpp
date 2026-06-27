@@ -4,6 +4,7 @@
 #include <optional>
 #include <vector>
 #include <functional>
+#include <chrono>
 #include <unordered_map>
 #include <shared_mutex>
 
@@ -182,6 +183,8 @@ public:
     models::User current_user() const;
     const ClientConfig& config() const;
     int64_t ping_latency() const;
+    std::chrono::steady_clock::time_point launch_time() const;
+    uint64_t uptime() const;
 
     // Cog modules and Commands APIs
     void use(std::unique_ptr<bot_module> module);
@@ -213,6 +216,7 @@ private:
     std::unordered_map<std::string, std::function<void(cluster&, const events::Message&, const std::vector<std::string>&)>> commands_;
     std::vector<Command> registered_commands_;
     std::atomic<bool> running_{false};
+    std::chrono::steady_clock::time_point launch_time_;
 
     struct HelpSession {
         int current_page = 0;

@@ -27,7 +27,8 @@ cluster::cluster(const std::string& token, ClientConfig config)
       config_(config),
       rest_(token, config),
       dispatcher_(),
-      gateway_(token, config, dispatcher_) {
+      gateway_(token, config, dispatcher_),
+      launch_time_(std::chrono::steady_clock::now()) {
 
     if (config_.enable_default_help) {
         register_command("help", [this](cluster& bot, const events::Message& msg, const std::vector<std::string>& args) {
@@ -1038,6 +1039,15 @@ void cluster::fetch_member(const std::string& server_id, const std::string& user
             if (callback) callback(models::Member{}, false);
         }
     }).detach();
+}
+
+std::chrono::steady_clock::time_point cluster::launch_time() const {
+    return launch_time_;
+}
+
+uint64_t cluster::uptime() const {
+    auto now = std::chrono::steady_clock::now();
+    return std::chrono::duration_cast<std::chrono::seconds>(now - launch_time_).count();
 }
 
 } // namespace stoatpp
