@@ -59,6 +59,26 @@ cmake --build .
 
 ---
 
+## setup with immutable systems (bazzite, steamos, etc.)
+
+since the host system is read-only, use **distrobox** (pre-installed) to create a development container:
+
+```bash
+# create and enter a fedora container
+distrobox create -n dev-box -i registry.fedoraproject.org/fedora:40
+distrobox enter dev-box
+
+# inside the container, install dependencies
+sudo dnf install git cmake gcc-c++ openssl-devel
+
+# build
+mkdir build && cd build
+cmake ..
+cmake --build .
+```
+
+---
+
 ## simple example
 
 ```cpp
