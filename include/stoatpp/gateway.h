@@ -33,6 +33,9 @@ private:
     void handle_event(const nlohmann::json& j);
 
     struct impl;
+    std::string token_;
+    ClientConfig config_;
+    event_dispatcher& dispatcher_;
     std::unique_ptr<impl> pimpl_;
 };
 
