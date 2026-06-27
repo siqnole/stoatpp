@@ -343,39 +343,61 @@ void cluster::register_command(const std::string& name,
 }
 
 void cluster::fetch_user(const std::string& user_id, std::function<void(models::User, bool success)> callback) {
-    std::thread([this, user_id, callback]() {
+    auto cached = get_user(user_id);
+    if (cached && cached->bio.has_value()) {
+        if (callback) callback(*cached, true);
+        return;
+    }
+
+    std::thread([this, user_id, cached, callback]() {
         try {
-            auto res = rest_.get("/users/" + user_id);
-            if (res.success()) {
-                auto usr = models::User::from_json(res.body);
-                
-                auto prof_res = rest_.get("/users/" + user_id + "/profile");
-                if (prof_res.success()) {
-                    const auto& prof = prof_res.body;
-                    if (prof.contains("content") && prof["content"].is_string()) {
-                        usr.bio = prof["content"].get<std::string>();
-                    }
-                    if (prof.contains("background") && !prof["background"].is_null()) {
-                        if (prof["background"].is_string()) {
-                            usr.banner = prof["background"].get<std::string>();
-                        } else if (prof["background"].is_object()) {
-                            if (prof["background"].contains("id") && prof["background"]["id"].is_string()) {
-                                usr.banner = prof["background"]["id"].get<std::string>();
-                            } else if (prof["background"].contains("_id") && prof["background"]["_id"].is_string()) {
-                                usr.banner = prof["background"]["_id"].get<std::string>();
-                            }
+            models::User usr;
+            bool got_user = false;
+            if (cached) {
+                usr = *cached;
+                got_user = true;
+            }
+
+            if (!got_user) {
+                auto res = rest_.get("/users/" + user_id);
+                if (res.success()) {
+                    usr = models::User::from_json(res.body);
+                    got_user = true;
+                }
+            }
+
+            if (!got_user) {
+                if (callback) callback(models::User{}, false);
+                return;
+            }
+
+            auto prof_res = rest_.get("/users/" + user_id + "/profile");
+            if (prof_res.success()) {
+                const auto& prof = prof_res.body;
+                if (prof.contains("content") && prof["content"].is_string()) {
+                    usr.bio = prof["content"].get<std::string>();
+                }
+                if (prof.contains("background") && !prof["background"].is_null()) {
+                    if (prof["background"].is_string()) {
+                        usr.banner = prof["background"].get<std::string>();
+                    } else if (prof["background"].is_object()) {
+                        if (prof["background"].contains("id") && prof["background"]["id"].is_string()) {
+                            usr.banner = prof["background"]["id"].get<std::string>();
+                        } else if (prof["background"].contains("_id") && prof["background"]["_id"].is_string()) {
+                            usr.banner = prof["background"]["_id"].get<std::string>();
                         }
                     }
                 }
-
-                {
-                    std::lock_guard<std::shared_mutex> lock(cache_mutex_);
-                    user_cache_[usr.id] = usr;
-                }
-                if (callback) callback(usr, true);
             } else {
-                if (callback) callback(models::User{}, false);
+                usr.bio = "";
+                usr.banner = "";
             }
+
+            {
+                std::lock_guard<std::shared_mutex> lock(cache_mutex_);
+                user_cache_[usr.id] = usr;
+            }
+            if (callback) callback(usr, true);
         } catch (...) {
             if (callback) callback(models::User{}, false);
         }

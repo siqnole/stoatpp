@@ -43,8 +43,12 @@ inline Member Member::from_json(const nlohmann::json& j) {
     if (j.contains("avatar") && !j["avatar"].is_null()) {
         if (j["avatar"].is_string()) {
             m.avatar = j["avatar"].get<std::string>();
-        } else if (j["avatar"].is_object() && j["avatar"].contains("id") && j["avatar"]["id"].is_string()) {
-            m.avatar = j["avatar"]["id"].get<std::string>();
+        } else if (j["avatar"].is_object()) {
+            if (j["avatar"].contains("id") && j["avatar"]["id"].is_string()) {
+                m.avatar = j["avatar"]["id"].get<std::string>();
+            } else if (j["avatar"].contains("_id") && j["avatar"]["_id"].is_string()) {
+                m.avatar = j["avatar"]["_id"].get<std::string>();
+            }
         }
     }
     if (j.contains("roles") && j["roles"].is_array()) {
