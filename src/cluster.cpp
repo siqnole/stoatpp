@@ -36,6 +36,14 @@ cluster::cluster(const std::string& token, ClientConfig config)
                 return a.name < b.name;
             });
 
+            std::string prefix = config_.command_prefix;
+            if (config_.prefix_resolver) {
+                auto resolved = config_.prefix_resolver(bot, msg);
+                if (!resolved.empty()) {
+                    prefix = resolved[0];
+                }
+            }
+
             int max_pages = (cmds.size() + 2) / 3;
             if (max_pages == 0) max_pages = 1;
 
@@ -47,17 +55,17 @@ cluster::cluster(const std::string& token, ClientConfig config)
             std::string desc = "here is a list of all registered commands:\n\n";
             for (size_t i = 0; i < 3 && i < cmds.size(); ++i) {
                 const auto& cmd = cmds[i];
-                desc += "• **" + config_.command_prefix + cmd.name + "**";
+                desc += "• **" + prefix + cmd.name + "**";
                 if (!cmd.aliases.empty()) {
                     desc += " (aliases: ";
                     for (size_t a = 0; a < cmd.aliases.size(); ++a) {
-                        desc += "`" + config_.command_prefix + cmd.aliases[a] + "`" + (a + 1 < cmd.aliases.size() ? ", " : "");
+                        desc += "`" + prefix + cmd.aliases[a] + "`" + (a + 1 < cmd.aliases.size() ? ", " : "");
                     }
                     desc += ")";
                 }
                 desc += "\n";
 
-                std::string syntax = config_.command_prefix + cmd.name;
+                std::string syntax = prefix + cmd.name;
                 if (!cmd.args.empty()) {
                     for (const auto& arg : cmd.args) {
                         syntax += " " + arg;
@@ -122,6 +130,25 @@ cluster::cluster(const std::string& token, ClientConfig config)
                     int max_pages = session.max_pages;
                     lock.unlock();
 
+                    events::Message dummy_msg;
+                    dummy_msg.author.id = e.user_id;
+                    dummy_msg.channel_id = e.channel_id;
+                    {
+                        std::shared_lock<std::shared_mutex> cache_lock(cache_mutex_);
+                        auto ch_it = channel_cache_.find(e.channel_id);
+                        if (ch_it != channel_cache_.end()) {
+                            dummy_msg.server_id = ch_it->second.server_id.value_or("");
+                        }
+                    }
+
+                    std::string prefix = config_.command_prefix;
+                    if (config_.prefix_resolver) {
+                        auto resolved = config_.prefix_resolver(*this, dummy_msg);
+                        if (!resolved.empty()) {
+                            prefix = resolved[0];
+                        }
+                    }
+
                     std::vector<Command> cmds = registered_commands_;
                     std::sort(cmds.begin(), cmds.end(), [](const Command& a, const Command& b) {
                         return a.name < b.name;
@@ -137,17 +164,17 @@ cluster::cluster(const std::string& token, ClientConfig config)
                     size_t start = page * 3;
                     for (size_t i = start; i < start + 3 && i < cmds.size(); ++i) {
                         const auto& cmd = cmds[i];
-                        desc += "• **" + config_.command_prefix + cmd.name + "**";
+                        desc += "• **" + prefix + cmd.name + "**";
                         if (!cmd.aliases.empty()) {
                             desc += " (aliases: ";
                             for (size_t a = 0; a < cmd.aliases.size(); ++a) {
-                                desc += "`" + config_.command_prefix + cmd.aliases[a] + "`" + (a + 1 < cmd.aliases.size() ? ", " : "");
+                                desc += "`" + prefix + cmd.aliases[a] + "`" + (a + 1 < cmd.aliases.size() ? ", " : "");
                             }
                             desc += ")";
                         }
                         desc += "\n";
 
-                        std::string syntax = config_.command_prefix + cmd.name;
+                        std::string syntax = prefix + cmd.name;
                         if (!cmd.args.empty()) {
                             for (const auto& arg : cmd.args) {
                                 syntax += " " + arg;
@@ -187,10 +214,28 @@ cluster::cluster(const std::string& token, ClientConfig config)
             user_cache_[usr.id] = usr;
         }
 
-        const std::string& prefix = config_.command_prefix;
-        if (msg.content.rfind(prefix, 0) != 0) return;
+        std::vector<std::string> prefixes;
+        if (config_.prefix_resolver) {
+            prefixes = config_.prefix_resolver(*this, msg);
+        } else {
+            prefixes = {config_.command_prefix};
+        }
 
-        std::stringstream ss(msg.content.substr(prefix.size()));
+        std::sort(prefixes.begin(), prefixes.end(), [](const std::string& a, const std::string& b) {
+            return a.size() > b.size();
+        });
+
+        std::string matched_prefix = "";
+        for (const auto& p : prefixes) {
+            if (!p.empty() && msg.content.rfind(p, 0) == 0) {
+                matched_prefix = p;
+                break;
+            }
+        }
+
+        if (matched_prefix.empty()) return;
+
+        std::stringstream ss(msg.content.substr(matched_prefix.size()));
         std::string cmd;
         ss >> cmd;
 

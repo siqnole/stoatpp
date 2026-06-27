@@ -8,6 +8,10 @@
 namespace stoatpp {
 
 class IHttpClient;
+class cluster;
+namespace events {
+    struct Message;
+}
 
 enum class LogLevel {
     NONE = 0,
@@ -71,6 +75,8 @@ struct ClientConfig {
 
     // --- Command prefix (like discord.py) ---
     std::string command_prefix = "!";
+    // Custom Prefix Resolver: dynamically returns a list of prefixes for a message.
+    std::function<std::vector<std::string>(class cluster&, const struct events::Message&)> prefix_resolver = nullptr;
 
     // --- Intents / Subscriptions (future-proofing) ---
     bool subscribe_to_user_updates = false;
