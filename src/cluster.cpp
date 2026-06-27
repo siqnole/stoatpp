@@ -1,4 +1,9 @@
 #include "stoatpp/cluster.h"
+#include "stoatpp/bot_module.h"
+#include "stoatpp/utils/logger.h"
+#include <sstream>
+#include <thread>
+#include <chrono>
 
 namespace stoatpp {
 
@@ -7,14 +12,85 @@ cluster::cluster(const std::string& token, ClientConfig config)
       config_(config),
       rest_(token, config),
       dispatcher_(),
-      gateway_(token, config, dispatcher_) {}
+      gateway_(token, config, dispatcher_) {
+
+    // 1. Automatic prefix-based command routing
+    this->on_message([this](const events::Message& msg) {
+        if (msg.content.empty() || msg.content[0] != '!') return;
+
+        std::stringstream ss(msg.content.substr(1));
+        std::string cmd;
+        ss >> cmd;
+
+        std::vector<std::string> args;
+        std::string arg;
+        while (ss >> arg) {
+            args.push_back(arg);
+        }
+
+        auto it = commands_.find(cmd);
+        if (it != commands_.end()) {
+            it->second(*this, msg, args);
+        }
+    });
+
+    // 2. Local cache synchronisation via ready and incoming events
+    this->on_ready([this](const events::Ready& e) {
+        std::lock_guard<std::shared_mutex> lock(cache_mutex_);
+        utils::logger::log(LogLevel::DEBUG, "Caching Ready data: user=" + e.user.username + ", servers=" + std::to_string(e.servers.size()) + ", channels=" + std::to_string(e.channels.size()), config_);
+        current_user_ = e.user;
+        user_cache_[e.user.id] = e.user;
+        
+        for (const auto& s : e.servers) {
+            server_cache_[s.id] = s;
+        }
+        for (const auto& c : e.channels) {
+            channel_cache_[c.id] = c;
+        }
+    });
+
+    this->on_channel_create([this](const events::ChannelCreate& e) {
+        std::lock_guard<std::shared_mutex> lock(cache_mutex_);
+        utils::logger::log(LogLevel::DEBUG, "Caching new channel: " + e.channel.id, config_);
+        channel_cache_[e.channel.id] = e.channel;
+    });
+
+    this->on_channel_delete([this](const events::ChannelDelete& e) {
+        std::lock_guard<std::shared_mutex> lock(cache_mutex_);
+        utils::logger::log(LogLevel::DEBUG, "Removing channel from cache: " + e.id, config_);
+        channel_cache_.erase(e.id);
+    });
+
+    this->on_server_create([this](const events::ServerCreate& e) {
+        std::lock_guard<std::shared_mutex> lock(cache_mutex_);
+        utils::logger::log(LogLevel::DEBUG, "Caching new server: " + e.server.name + " (" + e.server.id + ")", config_);
+        server_cache_[e.server.id] = e.server;
+    });
+
+    this->on_server_delete([this](const events::ServerDelete& e) {
+        std::lock_guard<std::shared_mutex> lock(cache_mutex_);
+        utils::logger::log(LogLevel::DEBUG, "Removing server from cache: " + e.id, config_);
+        server_cache_.erase(e.id);
+    });
+}
 
 void cluster::start(bool return_after_init) {
-    // Stub
+    utils::logger::log(LogLevel::INFO, "Starting cluster...", config_);
+    
+    gateway_.connect();
+
+    running_ = true;
+    if (return_after_init) return;
+
+    while (running_) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
 }
 
 void cluster::stop() {
-    // Stub
+    utils::logger::log(LogLevel::INFO, "Stopping cluster...", config_);
+    running_ = false;
+    gateway_.disconnect();
 }
 
 void cluster::on_ready(std::function<void(const events::Ready&)> cb) {
@@ -104,41 +180,92 @@ void cluster::on_raw_event(std::function<void(const std::string& type, const nlo
 void cluster::send_message(const std::string& channel_id,
                            const std::string& content,
                            std::function<void(models::Message, bool success)> callback) {
-    // Stub
+    models::MessagePayload payload;
+    payload.content = content;
+    send_message(channel_id, payload, callback);
 }
 
 void cluster::send_message(const std::string& channel_id,
                            const models::MessagePayload& payload,
                            std::function<void(models::Message, bool)> callback) {
-    // Stub
+    std::thread([this, channel_id, payload, callback]() {
+        try {
+            std::string path = "/channels/" + channel_id + "/messages";
+            auto res = rest_.post(path, payload.to_json());
+            if (res.success()) {
+                auto msg = models::Message::from_json(res.body);
+                if (callback) callback(msg, true);
+            } else {
+                utils::logger::log(LogLevel::ERROR, "Failed to send message: " + res.error_message(), config_);
+                if (callback) callback(models::Message{}, false);
+            }
+        } catch (const std::exception& e) {
+            utils::logger::log(LogLevel::ERROR, "Exception in send_message: " + std::string(e.what()), config_);
+            if (callback) callback(models::Message{}, false);
+        }
+    }).detach();
 }
 
 void cluster::edit_message(const std::string& channel_id,
                            const std::string& message_id,
                            const std::string& new_content,
                            std::function<void(models::Message, bool)> callback) {
-    // Stub
+    std::thread([this, channel_id, message_id, new_content, callback]() {
+        try {
+            std::string path = "/channels/" + channel_id + "/messages/" + message_id;
+            nlohmann::json body = {{"content", new_content}};
+            auto res = rest_.patch(path, body);
+            if (res.success()) {
+                auto msg = models::Message::from_json(res.body);
+                if (callback) callback(msg, true);
+            } else {
+                utils::logger::log(LogLevel::ERROR, "Failed to edit message: " + res.error_message(), config_);
+                if (callback) callback(models::Message{}, false);
+            }
+        } catch (const std::exception& e) {
+            utils::logger::log(LogLevel::ERROR, "Exception in edit_message: " + std::string(e.what()), config_);
+            if (callback) callback(models::Message{}, false);
+        }
+    }).detach();
 }
 
 void cluster::delete_message(const std::string& channel_id,
                              const std::string& message_id,
                              std::function<void(bool)> callback) {
-    // Stub
+    std::thread([this, channel_id, message_id, callback]() {
+        try {
+            std::string path = "/channels/" + channel_id + "/messages/" + message_id;
+            auto res = rest_.del(path);
+            if (callback) callback(res.success());
+        } catch (const std::exception& e) {
+            utils::logger::log(LogLevel::ERROR, "Exception in delete_message: " + std::string(e.what()), config_);
+            if (callback) callback(false);
+        }
+    }).detach();
 }
 
 void cluster::react_to_message(const std::string& channel_id,
                                const std::string& message_id,
                                const std::string& emoji_id,
                                std::function<void(bool)> callback) {
-    // Stub
+    std::thread([this, channel_id, message_id, emoji_id, callback]() {
+        try {
+            std::string path = "/channels/" + channel_id + "/messages/" + message_id + "/reactions/" + emoji_id;
+            auto res = rest_.put(path);
+            if (callback) callback(res.success());
+        } catch (const std::exception& e) {
+            utils::logger::log(LogLevel::ERROR, "Exception in react_to_message: " + std::string(e.what()), config_);
+            if (callback) callback(false);
+        }
+    }).detach();
 }
 
 void cluster::begin_typing(const std::string& channel_id) {
-    // Stub
+    gateway_.begin_typing(channel_id);
 }
 
 void cluster::end_typing(const std::string& channel_id) {
-    // Stub
+    gateway_.end_typing(channel_id);
 }
 
 rest_client& cluster::rest() {
@@ -177,6 +304,18 @@ models::User cluster::current_user() const {
 
 const ClientConfig& cluster::config() const {
     return config_;
+}
+
+void cluster::use(std::unique_ptr<bot_module> module) {
+    if (module) {
+        module->register_handlers(*this);
+        modules_.push_back(std::move(module));
+    }
+}
+
+void cluster::register_command(const std::string& name,
+                              std::function<void(cluster&, const events::Message&, const std::vector<std::string>&)> cb) {
+    commands_[name] = cb;
 }
 
 } // namespace stoatpp

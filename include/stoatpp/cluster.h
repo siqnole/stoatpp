@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include <atomic>
 #include <optional>
 #include <vector>
 #include <functional>
@@ -16,6 +17,8 @@
 #include "models/message.h"
 
 namespace stoatpp {
+
+class bot_module;
 
 class cluster {
 public:
@@ -82,6 +85,11 @@ public:
     models::User current_user() const;
     const ClientConfig& config() const;
 
+    // Cog modules and Commands APIs
+    void use(std::unique_ptr<bot_module> module);
+    void register_command(const std::string& name,
+                          std::function<void(cluster&, const events::Message&, const std::vector<std::string>&)> cb);
+
 private:
     std::string      token_;
     ClientConfig     config_;
@@ -94,6 +102,11 @@ private:
     std::unordered_map<std::string, models::Channel> channel_cache_;
     std::unordered_map<std::string, models::User> user_cache_;
     models::User current_user_;
+
+    // Cogs & Commands state
+    std::vector<std::unique_ptr<bot_module>> modules_;
+    std::unordered_map<std::string, std::function<void(cluster&, const events::Message&, const std::vector<std::string>&)>> commands_;
+    std::atomic<bool> running_{false};
 };
 
 } // namespace stoatpp

@@ -6,6 +6,7 @@
 #include "rest.h"
 #include "gateway.h"
 #include "cluster.h"
+#include "bot_module.h"
 
 #include "models/user.h"
 #include "models/role.h"

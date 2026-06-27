@@ -24,6 +24,7 @@ FetchContent_MakeAvailable(httplib)
 
 if(NOT STOATPP_USE_BOOST_BEAST)
     # ixwebsocket
+    set(USE_TLS ON CACHE BOOL "Enable TLS/SSL support" FORCE)
     FetchContent_Declare(ixwebsocket
         GIT_REPOSITORY https://github.com/machinezone/IXWebSocket.git
         GIT_TAG        v11.4.5

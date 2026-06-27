@@ -20,11 +20,23 @@ struct Role {
 inline Role Role::from_json(const nlohmann::json& j) {
     Role r;
     r.raw = j;
+    if (j.contains("id") && j["id"].is_string()) r.id = j["id"].get<std::string>();
+    else if (j.contains("_id") && j["_id"].is_string()) r.id = j["_id"].get<std::string>();
+    if (j.contains("name") && j["name"].is_string()) r.name = j["name"].get<std::string>();
+    if (j.contains("colour") && j["colour"].is_string()) r.colour = j["colour"].get<std::string>();
+    if (j.contains("rank") && j["rank"].is_number()) r.rank = j["rank"].get<int>();
+    if (j.contains("permissions")) r.permissions = j["permissions"];
     return r;
 }
 
 inline nlohmann::json Role::to_json() const {
-    return raw;
+    nlohmann::json j = raw;
+    j["id"] = id;
+    j["name"] = name;
+    if (colour) j["colour"] = *colour;
+    j["rank"] = rank;
+    j["permissions"] = permissions;
+    return j;
 }
 
 } // namespace stoatpp::models
