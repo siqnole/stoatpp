@@ -240,6 +240,10 @@ stoatpp::models::MessageQuery query;
 query.limit = 50;
 bot.rest().get_messages("channel_id", query);
 
+stoatpp::models::MessageSearchQuery search_query;
+search_query.query = "my search term";
+bot.rest().search_messages("channel_id", search_query);
+
 bot.rest().delete_messages_bulk("channel_id", {"id1", "id2"});
 bot.rest().pin_message("channel_id", "msg_id");
 bot.rest().unpin_message("channel_id", "msg_id");
