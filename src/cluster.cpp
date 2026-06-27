@@ -4,8 +4,22 @@
 #include <sstream>
 #include <thread>
 #include <chrono>
+#include <iomanip>
 
 namespace stoatpp {
+
+static std::string url_encode(const std::string& value) {
+    std::ostringstream escaped;
+    escaped << std::hex;
+    for (char c : value) {
+        if (std::isalnum(static_cast<unsigned char>(c)) || c == '-' || c == '_' || c == '.' || c == '~') {
+            escaped << c;
+        } else {
+            escaped << '%' << std::uppercase << std::setw(2) << std::setfill('0') << (static_cast<int>(c) & 0xFF);
+        }
+    }
+    return escaped.str();
+}
 
 cluster::cluster(const std::string& token, ClientConfig config)
     : token_(token),
@@ -311,7 +325,7 @@ void cluster::react_to_message(const std::string& channel_id,
                                std::function<void(bool)> callback) {
     std::thread([this, channel_id, message_id, emoji_id, callback]() {
         try {
-            std::string path = "/channels/" + channel_id + "/messages/" + message_id + "/reactions/" + emoji_id;
+            std::string path = "/channels/" + channel_id + "/messages/" + message_id + "/reactions/" + url_encode(emoji_id);
             auto res = rest_.put(path);
             if (callback) callback(res.success());
         } catch (const std::exception& e) {
@@ -613,6 +627,27 @@ void cluster::clear_slowmode(const std::string& channel_id,
             if (callback) callback(res.success());
         } catch (const std::exception& e) {
             utils::logger::log(LogLevel::ERROR, "Exception in clear_slowmode: " + std::string(e.what()), config_);
+            if (callback) callback(false);
+        }
+    }).detach();
+}
+
+void cluster::update_status(const std::string& text,
+                           const std::string& presence,
+                           std::function<void(bool)> callback) {
+    std::thread([this, text, presence, callback]() {
+        try {
+            nlohmann::json status_obj;
+            status_obj["text"] = text;
+            status_obj["presence"] = presence;
+            
+            nlohmann::json body;
+            body["status"] = status_obj;
+            
+            auto res = rest_.patch("/users/@me", body);
+            if (callback) callback(res.success());
+        } catch (const std::exception& e) {
+            utils::logger::log(LogLevel::ERROR, "Exception in update_status: " + std::string(e.what()), config_);
             if (callback) callback(false);
         }
     }).detach();

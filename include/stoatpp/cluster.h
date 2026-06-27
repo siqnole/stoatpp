@@ -149,6 +149,10 @@ public:
     void clear_slowmode(const std::string& channel_id,
                         std::function<void(bool)> callback = nullptr);
 
+    void update_status(const std::string& text,
+                       const std::string& presence = "Online",
+                       std::function<void(bool)> callback = nullptr);
+
     void fetch_channel_permissions(const std::string& channel_id,
                                    std::function<void(nlohmann::json permissions, bool success)> callback);
 

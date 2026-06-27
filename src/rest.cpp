@@ -5,8 +5,23 @@
 #include <chrono>
 #include <thread>
 #include <iostream>
+#include <sstream>
+#include <iomanip>
 
 namespace stoatpp {
+
+static std::string url_encode(const std::string& value) {
+    std::ostringstream escaped;
+    escaped << std::hex;
+    for (char c : value) {
+        if (std::isalnum(static_cast<unsigned char>(c)) || c == '-' || c == '_' || c == '.' || c == '~') {
+            escaped << c;
+        } else {
+            escaped << '%' << std::uppercase << std::setw(2) << std::setfill('0') << (static_cast<int>(c) & 0xFF);
+        }
+    }
+    return escaped.str();
+}
 
 rest_client::rest_client(const std::string& token, const ClientConfig& config)
     : token_(token), config_(config) {}
@@ -284,7 +299,7 @@ rest_client::Response rest_client::delete_messages_bulk(const std::string& chann
 }
 
 rest_client::Response rest_client::remove_reaction(const std::string& channel_id, const std::string& message_id, const std::string& emoji, const std::optional<std::string>& user_id) {
-    std::string path = "/channels/" + channel_id + "/messages/" + message_id + "/reactions/" + emoji;
+    std::string path = "/channels/" + channel_id + "/messages/" + message_id + "/reactions/" + url_encode(emoji);
     if (user_id) path += "?user_id=" + *user_id;
     return del(path);
 }
