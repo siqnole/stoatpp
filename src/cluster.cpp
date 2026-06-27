@@ -248,6 +248,15 @@ void cluster::send_message(const std::string& channel_id,
             if (res.success()) {
                 auto msg = models::Message::from_json(res.body);
                 if (callback) callback(msg, true);
+
+                if (payload.delete_after > 0) {
+                    std::string msg_id = msg.id;
+                    int delay = payload.delete_after;
+                    std::thread([this, channel_id, msg_id, delay]() {
+                        std::this_thread::sleep_for(std::chrono::seconds(delay));
+                        rest_.del("/channels/" + channel_id + "/messages/" + msg_id);
+                    }).detach();
+                }
             } else {
                 utils::logger::log(LogLevel::ERROR, "Failed to send message: " + res.error_message(), config_);
                 if (callback) callback(models::Message{}, false);
@@ -258,6 +267,7 @@ void cluster::send_message(const std::string& channel_id,
         }
     }).detach();
 }
+
 
 void cluster::edit_message(const std::string& channel_id,
                            const std::string& message_id,

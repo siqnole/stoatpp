@@ -26,6 +26,9 @@ struct MessagePayload {
     // Embeds (send custom embed objects)
     std::vector<nlohmann::json> embeds;
 
+    // library-only: auto-delete this message after N seconds (0 = disabled)
+    int delete_after = 0;
+
     nlohmann::json to_json() const;
 };
 
