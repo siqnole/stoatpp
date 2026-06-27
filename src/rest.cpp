@@ -317,11 +317,11 @@ rest_client::Response rest_client::get_pinned_messages(const std::string& channe
 }
 
 rest_client::Response rest_client::pin_message(const std::string& channel_id, const std::string& message_id) {
-    return put("/channels/" + channel_id + "/pins/" + message_id);
+    return put("/channels/" + channel_id + "/messages/" + message_id + "/pin");
 }
 
 rest_client::Response rest_client::unpin_message(const std::string& channel_id, const std::string& message_id) {
-    return del("/channels/" + channel_id + "/pins/" + message_id);
+    return del("/channels/" + channel_id + "/messages/" + message_id + "/pin");
 }
 
 // 3. Servers, Members & Roles
