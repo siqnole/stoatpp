@@ -123,4 +123,22 @@ inline nlohmann::json Message::to_json() const {
     return j;
 }
 
+struct MessageQuery {
+    std::optional<int> limit;
+    std::optional<std::string> before;
+    std::optional<std::string> after;
+    std::optional<std::string> sort; // "Latest" | "Oldest"
+    std::optional<std::string> nearby;
+
+    std::string to_query_string() const {
+        std::string q = "";
+        if (limit) q += (q.empty() ? "?" : "&") + std::string("limit=") + std::to_string(*limit);
+        if (before) q += (q.empty() ? "?" : "&") + std::string("before=") + *before;
+        if (after) q += (q.empty() ? "?" : "&") + std::string("after=") + *after;
+        if (sort) q += (q.empty() ? "?" : "&") + std::string("sort=") + *sort;
+        if (nearby) q += (q.empty() ? "?" : "&") + std::string("nearby=") + *nearby;
+        return q;
+    }
+};
+
 } // namespace stoatpp::models

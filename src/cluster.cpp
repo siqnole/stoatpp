@@ -164,8 +164,28 @@ void cluster::on_server_member_update(std::function<void(const events::ServerMem
     dispatcher_.on_server_member_update(cb);
 }
 
+void cluster::on_server_role_create(std::function<void(const events::ServerRoleCreate&)> cb) {
+    dispatcher_.on_server_role_create(cb);
+}
+
+void cluster::on_server_role_update(std::function<void(const events::ServerRoleUpdate&)> cb) {
+    dispatcher_.on_server_role_update(cb);
+}
+
+void cluster::on_server_role_delete(std::function<void(const events::ServerRoleDelete&)> cb) {
+    dispatcher_.on_server_role_delete(cb);
+}
+
 void cluster::on_user_update(std::function<void(const events::UserUpdate&)> cb) {
     dispatcher_.on_user_update(cb);
+}
+
+void cluster::on_user_settings_update(std::function<void(const events::UserSettingsUpdate&)> cb) {
+    dispatcher_.on_user_settings_update(cb);
+}
+
+void cluster::on_user_presence_update(std::function<void(const events::UserPresenceUpdate&)> cb) {
+    dispatcher_.on_user_presence_update(cb);
 }
 
 void cluster::on_channel_start_typing(std::function<void(const events::ChannelStartTyping&)> cb) {
@@ -174,6 +194,14 @@ void cluster::on_channel_start_typing(std::function<void(const events::ChannelSt
 
 void cluster::on_channel_stop_typing(std::function<void(const events::ChannelStopTyping&)> cb) {
     dispatcher_.on_channel_stop_typing(cb);
+}
+
+void cluster::on_webhook_update(std::function<void(const events::WebhookUpdate&)> cb) {
+    dispatcher_.on_webhook_update(cb);
+}
+
+void cluster::on_voice_state_update(std::function<void(const events::VoiceStateUpdate&)> cb) {
+    dispatcher_.on_voice_state_update(cb);
 }
 
 void cluster::on_error(std::function<void(const events::Error&)> cb) {

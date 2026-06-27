@@ -43,9 +43,16 @@ public:
     void on_server_member_join(std::function<void(const events::ServerMemberJoin&)> cb);
     void on_server_member_leave(std::function<void(const events::ServerMemberLeave&)> cb);
     void on_server_member_update(std::function<void(const events::ServerMemberUpdate&)> cb);
+    void on_server_role_create(std::function<void(const events::ServerRoleCreate&)> cb);
+    void on_server_role_update(std::function<void(const events::ServerRoleUpdate&)> cb);
+    void on_server_role_delete(std::function<void(const events::ServerRoleDelete&)> cb);
     void on_user_update(std::function<void(const events::UserUpdate&)> cb);
+    void on_user_settings_update(std::function<void(const events::UserSettingsUpdate&)> cb);
+    void on_user_presence_update(std::function<void(const events::UserPresenceUpdate&)> cb);
     void on_channel_start_typing(std::function<void(const events::ChannelStartTyping&)> cb);
     void on_channel_stop_typing(std::function<void(const events::ChannelStopTyping&)> cb);
+    void on_webhook_update(std::function<void(const events::WebhookUpdate&)> cb);
+    void on_voice_state_update(std::function<void(const events::VoiceStateUpdate&)> cb);
     void on_error(std::function<void(const events::Error&)> cb);
     void on_logout(std::function<void(const events::Logout&)> cb);
     void on_raw_event(std::function<void(const std::string& type, const nlohmann::json& data)> cb);

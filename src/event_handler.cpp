@@ -82,6 +82,41 @@ void event_dispatcher::on_user_update(std::function<void(const events::UserUpdat
     user_update_handlers_.push_back(cb);
 }
 
+void event_dispatcher::on_server_role_create(std::function<void(const events::ServerRoleCreate&)> cb) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    server_role_create_handlers_.push_back(cb);
+}
+
+void event_dispatcher::on_server_role_update(std::function<void(const events::ServerRoleUpdate&)> cb) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    server_role_update_handlers_.push_back(cb);
+}
+
+void event_dispatcher::on_server_role_delete(std::function<void(const events::ServerRoleDelete&)> cb) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    server_role_delete_handlers_.push_back(cb);
+}
+
+void event_dispatcher::on_user_settings_update(std::function<void(const events::UserSettingsUpdate&)> cb) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    user_settings_update_handlers_.push_back(cb);
+}
+
+void event_dispatcher::on_user_presence_update(std::function<void(const events::UserPresenceUpdate&)> cb) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    user_presence_update_handlers_.push_back(cb);
+}
+
+void event_dispatcher::on_webhook_update(std::function<void(const events::WebhookUpdate&)> cb) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    webhook_update_handlers_.push_back(cb);
+}
+
+void event_dispatcher::on_voice_state_update(std::function<void(const events::VoiceStateUpdate&)> cb) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    voice_state_update_handlers_.push_back(cb);
+}
+
 void event_dispatcher::on_channel_start_typing(std::function<void(const events::ChannelStartTyping&)> cb) {
     std::lock_guard<std::mutex> lock(mutex_);
     channel_start_typing_handlers_.push_back(cb);
@@ -248,6 +283,69 @@ void event_dispatcher::dispatch_user_update(const events::UserUpdate& e) {
     {
         std::lock_guard<std::mutex> lock(mutex_);
         handlers = user_update_handlers_;
+    }
+    for (auto& h : handlers) h(e);
+}
+
+void event_dispatcher::dispatch_server_role_create(const events::ServerRoleCreate& e) {
+    std::vector<std::function<void(const events::ServerRoleCreate&)>> handlers;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        handlers = server_role_create_handlers_;
+    }
+    for (auto& h : handlers) h(e);
+}
+
+void event_dispatcher::dispatch_server_role_update(const events::ServerRoleUpdate& e) {
+    std::vector<std::function<void(const events::ServerRoleUpdate&)>> handlers;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        handlers = server_role_update_handlers_;
+    }
+    for (auto& h : handlers) h(e);
+}
+
+void event_dispatcher::dispatch_server_role_delete(const events::ServerRoleDelete& e) {
+    std::vector<std::function<void(const events::ServerRoleDelete&)>> handlers;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        handlers = server_role_delete_handlers_;
+    }
+    for (auto& h : handlers) h(e);
+}
+
+void event_dispatcher::dispatch_user_settings_update(const events::UserSettingsUpdate& e) {
+    std::vector<std::function<void(const events::UserSettingsUpdate&)>> handlers;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        handlers = user_settings_update_handlers_;
+    }
+    for (auto& h : handlers) h(e);
+}
+
+void event_dispatcher::dispatch_user_presence_update(const events::UserPresenceUpdate& e) {
+    std::vector<std::function<void(const events::UserPresenceUpdate&)>> handlers;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        handlers = user_presence_update_handlers_;
+    }
+    for (auto& h : handlers) h(e);
+}
+
+void event_dispatcher::dispatch_webhook_update(const events::WebhookUpdate& e) {
+    std::vector<std::function<void(const events::WebhookUpdate&)>> handlers;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        handlers = webhook_update_handlers_;
+    }
+    for (auto& h : handlers) h(e);
+}
+
+void event_dispatcher::dispatch_voice_state_update(const events::VoiceStateUpdate& e) {
+    std::vector<std::function<void(const events::VoiceStateUpdate&)>> handlers;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        handlers = voice_state_update_handlers_;
     }
     for (auto& h : handlers) h(e);
 }

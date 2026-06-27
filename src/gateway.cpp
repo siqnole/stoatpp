@@ -477,6 +477,73 @@ void gateway::handle_event(const nlohmann::json& j) {
         dispatcher_.dispatch_channel_stop_typing(ev);
         return;
     }
+
+    if (type == "ServerRoleCreate") {
+        events::ServerRoleCreate ev;
+        if (j.contains("id")) ev.server_id = j["id"].get<std::string>();
+        if (j.contains("role_id")) ev.role_id = j["role_id"].get<std::string>();
+        if (j.contains("role")) ev.role = models::Role::from_json(j["role"]);
+        dispatcher_.dispatch_server_role_create(ev);
+        return;
+    }
+
+    if (type == "ServerRoleUpdate") {
+        events::ServerRoleUpdate ev;
+        if (j.contains("id")) ev.server_id = j["id"].get<std::string>();
+        if (j.contains("role_id")) ev.role_id = j["role_id"].get<std::string>();
+        if (j.contains("data")) ev.data = j["data"];
+        if (j.contains("clear") && j["clear"].is_array()) {
+            for (const auto& c : j["clear"]) {
+                if (c.is_string()) ev.clear.push_back(c.get<std::string>());
+            }
+        }
+        dispatcher_.dispatch_server_role_update(ev);
+        return;
+    }
+
+    if (type == "ServerRoleDelete") {
+        events::ServerRoleDelete ev;
+        if (j.contains("id")) ev.server_id = j["id"].get<std::string>();
+        if (j.contains("role_id")) ev.role_id = j["role_id"].get<std::string>();
+        dispatcher_.dispatch_server_role_delete(ev);
+        return;
+    }
+
+    if (type == "UserSettingsUpdate") {
+        events::UserSettingsUpdate ev;
+        if (j.contains("id")) ev.id = j["id"].get<std::string>();
+        if (j.contains("key")) ev.key = j["key"].get<std::string>();
+        if (j.contains("value")) ev.value = j["value"];
+        dispatcher_.dispatch_user_settings_update(ev);
+        return;
+    }
+
+    if (type == "UserPresenceUpdate") {
+        events::UserPresenceUpdate ev;
+        if (j.contains("id")) ev.id = j["id"].get<std::string>();
+        if (j.contains("status")) ev.status = j["status"].get<std::string>();
+        if (j.contains("text") && j["text"].is_string()) ev.text = j["text"].get<std::string>();
+        dispatcher_.dispatch_user_presence_update(ev);
+        return;
+    }
+
+    if (type == "WebhookUpdate") {
+        events::WebhookUpdate ev;
+        if (j.contains("channel_id")) ev.channel_id = j["channel_id"].get<std::string>();
+        if (j.contains("webhook_id")) ev.webhook_id = j["webhook_id"].get<std::string>();
+        if (j.contains("type")) ev.type = j["type"].get<std::string>();
+        dispatcher_.dispatch_webhook_update(ev);
+        return;
+    }
+
+    if (type == "VoiceStateUpdate") {
+        events::VoiceStateUpdate ev;
+        if (j.contains("channel_id")) ev.channel_id = j["channel_id"].get<std::string>();
+        if (j.contains("user_id")) ev.user_id = j["user_id"].get<std::string>();
+        if (j.contains("joined") && j["joined"].is_boolean()) ev.joined = j["joined"].get<bool>();
+        dispatcher_.dispatch_voice_state_update(ev);
+        return;
+    }
 }
 
 int64_t gateway::ping_latency() const {

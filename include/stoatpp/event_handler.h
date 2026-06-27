@@ -81,8 +81,50 @@ struct UserUpdate {
     std::vector<std::string> clear;
 };
 
+struct UserSettingsUpdate {
+    std::string id; // user ID
+    std::string key;
+    nlohmann::json value;
+};
+
+struct UserPresenceUpdate {
+    std::string id; // user ID
+    std::string status; // "Online", "Idle", "Focus", "Invisible"
+    std::optional<std::string> text; // status text message
+};
+
 struct ChannelStartTyping { std::string channel_id; std::string user_id; };
 struct ChannelStopTyping  { std::string channel_id; std::string user_id; };
+
+struct ServerRoleCreate {
+    std::string server_id;
+    std::string role_id;
+    models::Role role;
+};
+
+struct ServerRoleUpdate {
+    std::string server_id;
+    std::string role_id;
+    nlohmann::json data;
+    std::vector<std::string> clear;
+};
+
+struct ServerRoleDelete {
+    std::string server_id;
+    std::string role_id;
+};
+
+struct WebhookUpdate {
+    std::string channel_id;
+    std::string webhook_id;
+    std::string type; // "create", "update", "delete"
+};
+
+struct VoiceStateUpdate {
+    std::string channel_id;
+    std::string user_id;
+    bool joined = false;
+};
 
 struct Error   { std::string error_id; };
 struct Logout  {};
@@ -108,9 +150,16 @@ public:
     void on_server_member_join(std::function<void(const events::ServerMemberJoin&)> cb);
     void on_server_member_leave(std::function<void(const events::ServerMemberLeave&)> cb);
     void on_server_member_update(std::function<void(const events::ServerMemberUpdate&)> cb);
+    void on_server_role_create(std::function<void(const events::ServerRoleCreate&)> cb);
+    void on_server_role_update(std::function<void(const events::ServerRoleUpdate&)> cb);
+    void on_server_role_delete(std::function<void(const events::ServerRoleDelete&)> cb);
     void on_user_update(std::function<void(const events::UserUpdate&)> cb);
+    void on_user_settings_update(std::function<void(const events::UserSettingsUpdate&)> cb);
+    void on_user_presence_update(std::function<void(const events::UserPresenceUpdate&)> cb);
     void on_channel_start_typing(std::function<void(const events::ChannelStartTyping&)> cb);
     void on_channel_stop_typing(std::function<void(const events::ChannelStopTyping&)> cb);
+    void on_webhook_update(std::function<void(const events::WebhookUpdate&)> cb);
+    void on_voice_state_update(std::function<void(const events::VoiceStateUpdate&)> cb);
     void on_error(std::function<void(const events::Error&)> cb);
     void on_logout(std::function<void(const events::Logout&)> cb);
     void on_raw_event(std::function<void(const std::string&, const nlohmann::json&)> cb);
@@ -130,9 +179,16 @@ public:
     void dispatch_server_member_join(const events::ServerMemberJoin& e);
     void dispatch_server_member_leave(const events::ServerMemberLeave& e);
     void dispatch_server_member_update(const events::ServerMemberUpdate& e);
+    void dispatch_server_role_create(const events::ServerRoleCreate& e);
+    void dispatch_server_role_update(const events::ServerRoleUpdate& e);
+    void dispatch_server_role_delete(const events::ServerRoleDelete& e);
     void dispatch_user_update(const events::UserUpdate& e);
+    void dispatch_user_settings_update(const events::UserSettingsUpdate& e);
+    void dispatch_user_presence_update(const events::UserPresenceUpdate& e);
     void dispatch_channel_start_typing(const events::ChannelStartTyping& e);
     void dispatch_channel_stop_typing(const events::ChannelStopTyping& e);
+    void dispatch_webhook_update(const events::WebhookUpdate& e);
+    void dispatch_voice_state_update(const events::VoiceStateUpdate& e);
     void dispatch_error(const events::Error& e);
     void dispatch_logout(const events::Logout& e);
     void dispatch_raw_event(const std::string& type, const nlohmann::json& data);
@@ -153,9 +209,16 @@ private:
     std::vector<std::function<void(const events::ServerMemberJoin&)>> server_member_join_handlers_;
     std::vector<std::function<void(const events::ServerMemberLeave&)>> server_member_leave_handlers_;
     std::vector<std::function<void(const events::ServerMemberUpdate&)>> server_member_update_handlers_;
+    std::vector<std::function<void(const events::ServerRoleCreate&)>> server_role_create_handlers_;
+    std::vector<std::function<void(const events::ServerRoleUpdate&)>> server_role_update_handlers_;
+    std::vector<std::function<void(const events::ServerRoleDelete&)>> server_role_delete_handlers_;
     std::vector<std::function<void(const events::UserUpdate&)>> user_update_handlers_;
+    std::vector<std::function<void(const events::UserSettingsUpdate&)>> user_settings_update_handlers_;
+    std::vector<std::function<void(const events::UserPresenceUpdate&)>> user_presence_update_handlers_;
     std::vector<std::function<void(const events::ChannelStartTyping&)>> channel_start_typing_handlers_;
     std::vector<std::function<void(const events::ChannelStopTyping&)>> channel_stop_typing_handlers_;
+    std::vector<std::function<void(const events::WebhookUpdate&)>> webhook_update_handlers_;
+    std::vector<std::function<void(const events::VoiceStateUpdate&)>> voice_state_update_handlers_;
     std::vector<std::function<void(const events::Error&)>> error_handlers_;
     std::vector<std::function<void(const events::Logout&)>> logout_handlers_;
     std::vector<std::function<void(const std::string&, const nlohmann::json&)>> raw_event_handlers_;

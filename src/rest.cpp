@@ -216,4 +216,340 @@ void rest_client::set_pre_request_hook(std::function<void(const std::string& met
     pre_request_hook_ = hook;
 }
 
+// 1. System & Utility Endpoints
+rest_client::Response rest_client::get_node_info() {
+    return get("/");
+}
+
+rest_client::Response rest_client::get_stats() {
+    return get("/stats");
+}
+
+rest_client::Response rest_client::get_gateway() {
+    return get("/gateway");
+}
+
+rest_client::Response rest_client::create_report(const models::ReportPayload& payload) {
+    return post("/safety/report", payload.to_json());
+}
+
+rest_client::Response rest_client::create_webhook(const std::string& channel_id, const std::string& name, const std::optional<std::string>& avatar_id) {
+    nlohmann::json body;
+    body["name"] = name;
+    if (avatar_id) body["avatar"] = *avatar_id;
+    return post("/channels/" + channel_id + "/webhooks", body);
+}
+
+rest_client::Response rest_client::get_channel_webhooks(const std::string& channel_id) {
+    return get("/channels/" + channel_id + "/webhooks");
+}
+
+rest_client::Response rest_client::delete_webhook(const std::string& webhook_id) {
+    return del("/webhooks/" + webhook_id);
+}
+
+rest_client::Response rest_client::execute_webhook(const std::string& webhook_id, const std::string& webhook_token, const models::WebhookExecutePayload& payload) {
+    return post("/webhooks/" + webhook_id + "/" + webhook_token, payload.to_json());
+}
+
+rest_client::Response rest_client::get_attachment_metadata(const std::string& attachment_id) {
+    return get("/attachments/" + attachment_id);
+}
+
+rest_client::Response rest_client::get_user_settings() {
+    return get("/sync/settings");
+}
+
+rest_client::Response rest_client::update_user_settings(const nlohmann::json& delta) {
+    return post("/sync/settings", delta);
+}
+
+rest_client::Response rest_client::get_unread_channels() {
+    return get("/sync/unreads");
+}
+
+// 2. Messages, Reactions & Pins
+rest_client::Response rest_client::get_messages(const std::string& channel_id, const models::MessageQuery& query) {
+    return get("/channels/" + channel_id + "/messages" + query.to_query_string());
+}
+
+rest_client::Response rest_client::get_message(const std::string& channel_id, const std::string& message_id) {
+    return get("/channels/" + channel_id + "/messages/" + message_id);
+}
+
+rest_client::Response rest_client::delete_messages_bulk(const std::string& channel_id, const std::vector<std::string>& message_ids) {
+    nlohmann::json body;
+    body["ids"] = message_ids;
+    return post("/channels/" + channel_id + "/messages/bulk", body);
+}
+
+rest_client::Response rest_client::remove_reaction(const std::string& channel_id, const std::string& message_id, const std::string& emoji, const std::optional<std::string>& user_id) {
+    std::string path = "/channels/" + channel_id + "/messages/" + message_id + "/reactions/" + emoji;
+    if (user_id) path += "?user_id=" + *user_id;
+    return del(path);
+}
+
+rest_client::Response rest_client::get_pinned_messages(const std::string& channel_id) {
+    return get("/channels/" + channel_id + "/pins");
+}
+
+rest_client::Response rest_client::pin_message(const std::string& channel_id, const std::string& message_id) {
+    return put("/channels/" + channel_id + "/pins/" + message_id);
+}
+
+rest_client::Response rest_client::unpin_message(const std::string& channel_id, const std::string& message_id) {
+    return del("/channels/" + channel_id + "/pins/" + message_id);
+}
+
+// 3. Servers, Members & Roles
+rest_client::Response rest_client::create_server(const std::string& name, const std::optional<std::string>& description) {
+    nlohmann::json body;
+    body["name"] = name;
+    if (description) body["description"] = *description;
+    return post("/servers", body);
+}
+
+rest_client::Response rest_client::edit_server(const std::string& server_id, const nlohmann::json& fields) {
+    return patch("/servers/" + server_id, fields);
+}
+
+rest_client::Response rest_client::leave_server(const std::string& server_id) {
+    return del("/servers/" + server_id);
+}
+
+rest_client::Response rest_client::get_server_invites(const std::string& server_id) {
+    return get("/servers/" + server_id + "/invites");
+}
+
+rest_client::Response rest_client::get_server_bans(const std::string& server_id) {
+    return get("/servers/" + server_id + "/bans");
+}
+
+rest_client::Response rest_client::ban_user(const std::string& server_id, const std::string& user_id, const std::optional<std::string>& reason) {
+    nlohmann::json body = nlohmann::json::object();
+    if (reason) body["reason"] = *reason;
+    return put("/servers/" + server_id + "/bans/" + user_id, body);
+}
+
+rest_client::Response rest_client::unban_user(const std::string& server_id, const std::string& user_id) {
+    return del("/servers/" + server_id + "/bans/" + user_id);
+}
+
+rest_client::Response rest_client::get_server_members(const std::string& server_id) {
+    return get("/servers/" + server_id + "/members");
+}
+
+rest_client::Response rest_client::edit_member(const std::string& server_id, const std::string& user_id, const nlohmann::json& fields) {
+    return patch("/servers/" + server_id + "/members/" + user_id, fields);
+}
+
+rest_client::Response rest_client::kick_member(const std::string& server_id, const std::string& user_id) {
+    return del("/servers/" + server_id + "/members/" + user_id);
+}
+
+rest_client::Response rest_client::create_role(const std::string& server_id, const std::string& name) {
+    nlohmann::json body;
+    body["name"] = name;
+    return post("/servers/" + server_id + "/roles", body);
+}
+
+rest_client::Response rest_client::edit_role(const std::string& server_id, const std::string& role_id, const nlohmann::json& fields) {
+    return patch("/servers/" + server_id + "/roles/" + role_id, fields);
+}
+
+rest_client::Response rest_client::delete_role(const std::string& server_id, const std::string& role_id) {
+    return del("/servers/" + server_id + "/roles/" + role_id);
+}
+
+// 4. Channels & Permissions
+rest_client::Response rest_client::get_server_channels(const std::string& server_id) {
+    return get("/servers/" + server_id + "/channels");
+}
+
+rest_client::Response rest_client::create_channel(const std::string& server_id, const std::string& channel_type, const std::string& name) {
+    nlohmann::json body;
+    body["channel_type"] = channel_type;
+    body["name"] = name;
+    return post("/servers/" + server_id + "/channels", body);
+}
+
+rest_client::Response rest_client::edit_channel(const std::string& channel_id, const nlohmann::json& fields) {
+    return patch("/channels/" + channel_id, fields);
+}
+
+rest_client::Response rest_client::delete_channel(const std::string& channel_id) {
+    return del("/channels/" + channel_id);
+}
+
+rest_client::Response rest_client::get_channel_invites(const std::string& channel_id) {
+    return get("/channels/" + channel_id + "/invites");
+}
+
+rest_client::Response rest_client::create_channel_invite(const std::string& channel_id) {
+    return post("/channels/" + channel_id + "/invites");
+}
+
+rest_client::Response rest_client::get_channel_permissions(const std::string& channel_id) {
+    return get("/channels/" + channel_id + "/permissions");
+}
+
+rest_client::Response rest_client::set_channel_permission(const std::string& channel_id, const std::string& role_id, int64_t allow_mask, int64_t deny_mask) {
+    nlohmann::json body;
+    body["permissions"] = {{"allow", allow_mask}, {"deny", deny_mask}};
+    return put("/channels/" + channel_id + "/permissions/" + role_id, body);
+}
+
+rest_client::Response rest_client::delete_channel_permission(const std::string& channel_id, const std::string& role_id) {
+    return del("/channels/" + channel_id + "/permissions/" + role_id);
+}
+
+rest_client::Response rest_client::add_group_recipient(const std::string& channel_id, const std::string& user_id) {
+    return put("/channels/" + channel_id + "/recipients/" + user_id);
+}
+
+rest_client::Response rest_client::remove_group_recipient(const std::string& channel_id, const std::string& user_id) {
+    return del("/channels/" + channel_id + "/recipients/" + user_id);
+}
+
+// 5. Users & Relationships
+rest_client::Response rest_client::get_user_profile(const std::string& user_id) {
+    return get("/users/" + user_id + "/profile");
+}
+
+rest_client::Response rest_client::get_mutual_friends_and_servers(const std::string& user_id) {
+    return get("/users/" + user_id + "/mutual");
+}
+
+rest_client::Response rest_client::edit_current_user(const nlohmann::json& fields) {
+    return patch("/users/@me", fields);
+}
+
+rest_client::Response rest_client::get_relationships() {
+    return get("/users/relationships");
+}
+
+rest_client::Response rest_client::set_relationship(const std::string& user_id, const std::string& relationship_status) {
+    nlohmann::json body;
+    body["status"] = relationship_status;
+    return put("/users/" + user_id + "/relationship", body);
+}
+
+rest_client::Response rest_client::delete_relationship(const std::string& user_id) {
+    return del("/users/" + user_id + "/relationship");
+}
+
+// 6. Custom Emojis
+rest_client::Response rest_client::create_custom_emoji(const std::string& name, const std::string& file_id, const std::optional<std::string>& server_id) {
+    nlohmann::json body;
+    body["name"] = name;
+    body["file_id"] = file_id;
+    if (server_id) body["server_id"] = *server_id;
+    return post("/custom/emoji", body);
+}
+
+rest_client::Response rest_client::get_custom_emoji(const std::string& emoji_id) {
+    return get("/custom/emoji/" + emoji_id);
+}
+
+rest_client::Response rest_client::delete_custom_emoji(const std::string& emoji_id) {
+    return del("/custom/emoji/" + emoji_id);
+}
+
+// 7. Authentication & Session Management
+rest_client::Response rest_client::login_session(const std::string& email, const std::string& password, const std::string& friendly_name) {
+    nlohmann::json body;
+    body["email"] = email;
+    body["password"] = password;
+    body["friendly_name"] = friendly_name;
+    return post("/auth/session/login", body);
+}
+
+rest_client::Response rest_client::logout_session() {
+    return post("/auth/session/logout");
+}
+
+rest_client::Response rest_client::get_all_sessions() {
+    return get("/auth/session/all");
+}
+
+rest_client::Response rest_client::delete_session(const std::string& session_id) {
+    return del("/auth/session/" + session_id);
+}
+
+rest_client::Response rest_client::create_account(const std::string& email, const std::string& password) {
+    nlohmann::json body;
+    body["email"] = email;
+    body["password"] = password;
+    return post("/auth/account/create", body);
+}
+
+rest_client::Response rest_client::verify_account(const std::string& verification_token) {
+    nlohmann::json body;
+    body["token"] = verification_token;
+    return post("/auth/account/verify", body);
+}
+
+rest_client::Response rest_client::reset_password(const std::string& email) {
+    nlohmann::json body;
+    body["email"] = email;
+    return post("/auth/account/password/reset", body);
+}
+
+rest_client::Response rest_client::delete_account() {
+    return post("/auth/account/delete");
+}
+
+rest_client::Response rest_client::verify_totp(const std::string& mfa_token, const std::string& challenge_code) {
+    nlohmann::json body;
+    body["token"] = mfa_token;
+    body["code"] = challenge_code;
+    return post("/auth/mfa/totp", body);
+}
+
+rest_client::Response rest_client::use_mfa_ticket(const std::string& ticket_id, const std::string& mfa_token) {
+    nlohmann::json body;
+    body["ticket"] = ticket_id;
+    body["token"] = mfa_token;
+    return post("/auth/mfa/ticket", body);
+}
+
+// 8. Direct Messaging & Voice Calls
+rest_client::Response rest_client::get_active_dms() {
+    return get("/users/dms");
+}
+
+rest_client::Response rest_client::open_dm(const std::string& user_id) {
+    return post("/users/" + user_id + "/dm");
+}
+
+rest_client::Response rest_client::get_voice_call_info(const std::string& channel_id) {
+    return get("/channels/" + channel_id + "/call");
+}
+
+// 9. Custom Bot Management
+rest_client::Response rest_client::create_bot(const std::string& name) {
+    nlohmann::json body;
+    body["name"] = name;
+    return post("/bots", body);
+}
+
+rest_client::Response rest_client::get_bot(const std::string& bot_id) {
+    return get("/bots/" + bot_id);
+}
+
+rest_client::Response rest_client::edit_bot(const std::string& bot_id, const nlohmann::json& fields) {
+    return patch("/bots/" + bot_id, fields);
+}
+
+rest_client::Response rest_client::delete_bot(const std::string& bot_id) {
+    return del("/bots/" + bot_id);
+}
+
+rest_client::Response rest_client::invite_bot(const std::string& bot_id, const std::string& server_id, const std::string& channel_id) {
+    nlohmann::json body;
+    body["server"] = server_id;
+    body["channel"] = channel_id;
+    return post("/bots/" + bot_id + "/invite", body);
+}
+
 } // namespace stoatpp

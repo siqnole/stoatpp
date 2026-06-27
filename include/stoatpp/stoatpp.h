@@ -15,6 +15,13 @@
 #include "models/channel.h"
 #include "models/server.h"
 #include "models/message.h"
+#include "models/system.h"
+#include "models/webhook.h"
+#include "models/attachment.h"
+#include "models/user_settings.h"
+#include "models/invite.h"
+#include "models/ban.h"
+#include "models/bot.h"
 
 #include "utils/logger.h"
 #include "utils/ratelimiter.h"
