@@ -575,4 +575,113 @@ rest_client::Response rest_client::invite_bot(const std::string& bot_id, const s
     return post("/bots/" + bot_id + "/invite", body);
 }
 
+// 1. System & Utility (additional Webhooks)
+rest_client::Response rest_client::get_webhook(const std::string& webhook_id) {
+    return get("/webhooks/" + webhook_id);
+}
+
+rest_client::Response rest_client::edit_webhook(const std::string& webhook_id, const nlohmann::json& fields) {
+    return patch("/webhooks/" + webhook_id, fields);
+}
+
+// 2. Messages, Reactions & Pins (additional)
+rest_client::Response rest_client::clear_reactions(const std::string& channel_id, const std::string& message_id) {
+    return del("/channels/" + channel_id + "/messages/" + message_id + "/reactions");
+}
+
+rest_client::Response rest_client::acknowledge_message(const std::string& channel_id, const std::string& message_id) {
+    return put("/channels/" + channel_id + "/ack/" + message_id);
+}
+
+rest_client::Response rest_client::acknowledge_channel(const std::string& channel_id) {
+    return put("/channels/" + channel_id + "/ack");
+}
+
+// 3. Servers, Members & Roles (additional)
+rest_client::Response rest_client::get_server(const std::string& server_id) {
+    return get("/servers/" + server_id);
+}
+
+rest_client::Response rest_client::get_server_member(const std::string& server_id, const std::string& user_id) {
+    return get("/servers/" + server_id + "/members/" + user_id);
+}
+
+rest_client::Response rest_client::get_server_emojis(const std::string& server_id) {
+    return get("/servers/" + server_id + "/emojis");
+}
+
+// 4. Channels & Permissions (additional)
+rest_client::Response rest_client::get_channel(const std::string& channel_id) {
+    return get("/channels/" + channel_id);
+}
+
+// 5. Users & Relationships (additional)
+rest_client::Response rest_client::get_user(const std::string& user_id) {
+    return get("/users/" + user_id);
+}
+
+rest_client::Response rest_client::get_user_default_avatar(const std::string& user_id) {
+    return get("/users/" + user_id + "/default_avatar");
+}
+
+// 7. Authentication & Session Management (additional)
+rest_client::Response rest_client::reset_password_apply(const std::string& token, const std::string& new_password) {
+    nlohmann::json body;
+    body["token"] = token;
+    body["password"] = new_password;
+    return patch("/auth/account/reset_password", body);
+}
+
+rest_client::Response rest_client::change_password(const std::string& current_password, const std::string& new_password) {
+    nlohmann::json body;
+    body["current_password"] = current_password;
+    body["new_password"] = new_password;
+    return patch("/auth/account/change/password", body);
+}
+
+rest_client::Response rest_client::change_email(const std::string& current_password, const std::string& new_email) {
+    nlohmann::json body;
+    body["current_password"] = current_password;
+    body["new_email"] = new_email;
+    return patch("/auth/account/change/email", body);
+}
+
+rest_client::Response rest_client::delete_all_sessions(bool revoke_self) {
+    nlohmann::json body;
+    body["revoke_self"] = revoke_self;
+    std::string path = "/auth/session/all?revoke_self=" + std::string(revoke_self ? "true" : "false");
+    return del(path, body);
+}
+
+rest_client::Response rest_client::get_mfa_methods() {
+    return get("/auth/mfa/methods");
+}
+
+rest_client::Response rest_client::get_mfa_recovery_codes() {
+    return get("/auth/mfa/recovery");
+}
+
+rest_client::Response rest_client::regenerate_mfa_recovery_codes() {
+    return post("/auth/mfa/recovery");
+}
+
+// 10. Invites & Onboarding
+rest_client::Response rest_client::get_invite(const std::string& invite_code) {
+    return get("/invites/" + invite_code);
+}
+
+rest_client::Response rest_client::accept_invite(const std::string& invite_code) {
+    return post("/invites/" + invite_code);
+}
+
+rest_client::Response rest_client::get_onboarding_status() {
+    return get("/onboard/hello");
+}
+
+rest_client::Response rest_client::complete_onboarding(const std::string& username) {
+    nlohmann::json body;
+    body["username"] = username;
+    return post("/onboard/complete", body);
+}
+
 } // namespace stoatpp

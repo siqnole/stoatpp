@@ -225,6 +225,8 @@ bot.rest().create_report(rpt);
 ```cpp
 bot.rest().create_webhook("channel_id", "my web hook");
 bot.rest().get_channel_webhooks("channel_id");
+bot.rest().get_webhook("webhook_id");
+bot.rest().edit_webhook("webhook_id", {{"name", "updated"}});
 bot.rest().delete_webhook("webhook_id");
 
 stoatpp::models::WebhookExecutePayload wh;
@@ -248,18 +250,53 @@ bot.rest().delete_messages_bulk("channel_id", {"id1", "id2"});
 bot.rest().pin_message("channel_id", "msg_id");
 bot.rest().unpin_message("channel_id", "msg_id");
 bot.rest().get_pinned_messages("channel_id");
+bot.rest().clear_reactions("channel_id", "msg_id");
+bot.rest().acknowledge_message("channel_id", "msg_id");
+bot.rest().acknowledge_channel("channel_id");
 ```
 
 ### servers & moderation
 ```cpp
+bot.rest().get_server("server_id");
 bot.rest().create_server("my server");
 bot.rest().edit_server("server_id", {{"name", "new name"}});
 bot.rest().leave_server("server_id");
 
+bot.rest().get_server_member("server_id", "user_id");
+bot.rest().edit_member("server_id", "user_id", {{"nickname", "new nick"}});
+bot.rest().get_server_emojis("server_id");
+
 bot.rest().ban_user("server_id", "user_id", "spam");
 bot.rest().unban_user("server_id", "user_id");
-bot.rest().edit_member("server_id", "user_id", {{"nickname", "new nick"}});
 bot.rest().create_role("server_id", "admin");
+```
+
+### users & relationships
+```cpp
+bot.rest().get_user("user_id");
+bot.rest().get_user_profile("user_id");
+bot.rest().get_user_default_avatar("user_id");
+```
+
+### auth, mfa & onboarding
+```cpp
+bot.rest().change_password("old_pass", "new_pass");
+bot.rest().change_email("pass", "new_email@revolt.chat");
+bot.rest().reset_password_apply("reset_token", "new_pass");
+bot.rest().delete_all_sessions(false);
+
+bot.rest().get_mfa_methods();
+bot.rest().get_mfa_recovery_codes();
+bot.rest().regenerate_mfa_recovery_codes();
+
+bot.rest().get_onboarding_status();
+bot.rest().complete_onboarding("my_username");
+```
+
+### invites
+```cpp
+bot.rest().get_invite("invite_code");
+bot.rest().accept_invite("invite_code");
 ```
 
 ## gateway events

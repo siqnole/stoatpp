@@ -56,6 +56,8 @@ public:
 
     Response create_webhook(const std::string& channel_id, const std::string& name, const std::optional<std::string>& avatar_id = {});
     Response get_channel_webhooks(const std::string& channel_id);
+    Response get_webhook(const std::string& webhook_id);
+    Response edit_webhook(const std::string& webhook_id, const nlohmann::json& fields);
     Response delete_webhook(const std::string& webhook_id);
     Response execute_webhook(const std::string& webhook_id, const std::string& webhook_token, const models::WebhookExecutePayload& payload);
 
@@ -74,6 +76,9 @@ public:
     Response get_pinned_messages(const std::string& channel_id);
     Response pin_message(const std::string& channel_id, const std::string& message_id);
     Response unpin_message(const std::string& channel_id, const std::string& message_id);
+    Response clear_reactions(const std::string& channel_id, const std::string& message_id);
+    Response acknowledge_message(const std::string& channel_id, const std::string& message_id);
+    Response acknowledge_channel(const std::string& channel_id);
 
     // 3. Servers, Members & Roles
     Response create_server(const std::string& name, const std::optional<std::string>& description = {});
@@ -84,6 +89,9 @@ public:
     Response ban_user(const std::string& server_id, const std::string& user_id, const std::optional<std::string>& reason = {});
     Response unban_user(const std::string& server_id, const std::string& user_id);
     Response get_server_members(const std::string& server_id);
+    Response get_server(const std::string& server_id);
+    Response get_server_member(const std::string& server_id, const std::string& user_id);
+    Response get_server_emojis(const std::string& server_id);
     Response edit_member(const std::string& server_id, const std::string& user_id, const nlohmann::json& fields);
     Response kick_member(const std::string& server_id, const std::string& user_id);
     Response create_role(const std::string& server_id, const std::string& name);
@@ -91,6 +99,7 @@ public:
     Response delete_role(const std::string& server_id, const std::string& role_id);
 
     // 4. Channels & Permissions
+    Response get_channel(const std::string& channel_id);
     Response get_server_channels(const std::string& server_id);
     Response create_channel(const std::string& server_id, const std::string& channel_type, const std::string& name);
     Response edit_channel(const std::string& channel_id, const nlohmann::json& fields);
@@ -104,7 +113,9 @@ public:
     Response remove_group_recipient(const std::string& channel_id, const std::string& user_id);
 
     // 5. Users & Relationships
+    Response get_user(const std::string& user_id);
     Response get_user_profile(const std::string& user_id);
+    Response get_user_default_avatar(const std::string& user_id);
     Response get_mutual_friends_and_servers(const std::string& user_id);
     Response edit_current_user(const nlohmann::json& fields);
     Response get_relationships();
@@ -124,9 +135,16 @@ public:
     Response create_account(const std::string& email, const std::string& password);
     Response verify_account(const std::string& verification_token);
     Response reset_password(const std::string& email);
+    Response reset_password_apply(const std::string& token, const std::string& new_password);
+    Response change_password(const std::string& current_password, const std::string& new_password);
+    Response change_email(const std::string& current_password, const std::string& new_email);
     Response delete_account();
     Response verify_totp(const std::string& mfa_token, const std::string& challenge_code);
     Response use_mfa_ticket(const std::string& ticket_id, const std::string& mfa_token);
+    Response delete_all_sessions(bool revoke_self = false);
+    Response get_mfa_methods();
+    Response get_mfa_recovery_codes();
+    Response regenerate_mfa_recovery_codes();
 
     // 8. Direct Messaging & Voice Calls
     Response get_active_dms();
@@ -139,6 +157,12 @@ public:
     Response edit_bot(const std::string& bot_id, const nlohmann::json& fields);
     Response delete_bot(const std::string& bot_id);
     Response invite_bot(const std::string& bot_id, const std::string& server_id, const std::string& channel_id);
+
+    // 10. Invites & Onboarding
+    Response get_invite(const std::string& invite_code);
+    Response accept_invite(const std::string& invite_code);
+    Response get_onboarding_status();
+    Response complete_onboarding(const std::string& username);
 
 private:
     std::string token_;
