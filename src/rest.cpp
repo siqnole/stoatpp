@@ -292,6 +292,10 @@ rest_client::Response rest_client::get_message(const std::string& channel_id, co
     return get("/channels/" + channel_id + "/messages/" + message_id);
 }
 
+rest_client::Response rest_client::search_messages(const std::string& channel_id, const models::MessageSearchQuery& query) {
+    return post("/channels/" + channel_id + "/search", query.to_json());
+}
+
 rest_client::Response rest_client::delete_messages_bulk(const std::string& channel_id, const std::vector<std::string>& message_ids) {
     nlohmann::json body;
     body["ids"] = message_ids;

@@ -141,4 +141,26 @@ struct MessageQuery {
     }
 };
 
+struct MessageSearchQuery {
+    std::optional<std::string> query;
+    std::optional<int> limit;
+    std::optional<std::string> before;
+    std::optional<std::string> after;
+    std::optional<std::string> sort; // "Latest" | "Oldest" | "Relevance"
+    std::optional<bool> pinned;
+    std::optional<bool> include_users;
+
+    nlohmann::json to_json() const {
+        nlohmann::json j = nlohmann::json::object();
+        if (query) j["query"] = *query;
+        if (limit) j["limit"] = *limit;
+        if (before) j["before"] = *before;
+        if (after) j["after"] = *after;
+        if (sort) j["sort"] = *sort;
+        if (pinned) j["pinned"] = *pinned;
+        if (include_users) j["include_users"] = *include_users;
+        return j;
+    }
+};
+
 } // namespace stoatpp::models

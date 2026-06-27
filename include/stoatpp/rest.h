@@ -68,6 +68,7 @@ public:
     // 2. Messages, Reactions & Pins
     Response get_messages(const std::string& channel_id, const models::MessageQuery& query);
     Response get_message(const std::string& channel_id, const std::string& message_id);
+    Response search_messages(const std::string& channel_id, const models::MessageSearchQuery& query);
     Response delete_messages_bulk(const std::string& channel_id, const std::vector<std::string>& message_ids);
     Response remove_reaction(const std::string& channel_id, const std::string& message_id, const std::string& emoji, const std::optional<std::string>& user_id = {});
     Response get_pinned_messages(const std::string& channel_id);
