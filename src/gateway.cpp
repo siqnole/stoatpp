@@ -257,7 +257,11 @@ void gateway::handle_event(const nlohmann::json& j) {
         else if (j.contains("_id")) ev.id = j["_id"].get<std::string>();
         
         if (j.contains("channel")) ev.channel_id = j["channel"].get<std::string>();
-        if (j.contains("server")) ev.server_id = j["server"].get<std::string>();
+        if (j.contains("server")) {
+            ev.server_id = j["server"].get<std::string>();
+        } else if (j.contains("member") && j["member"].is_object() && j["member"].contains("_id") && j["member"]["_id"].is_object() && j["member"]["_id"].contains("server")) {
+            ev.server_id = j["member"]["_id"]["server"].get<std::string>();
+        }
         
         if (j.contains("author")) {
             if (j["author"].is_object()) {

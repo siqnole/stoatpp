@@ -12,6 +12,7 @@ struct Member {
     std::optional<std::string> nickname;
     std::optional<std::string> avatar;
     std::vector<std::string> roles;
+    std::string joined_at;
     nlohmann::json raw;                            // original parsed object
 
     static Member from_json(const nlohmann::json& j);
@@ -51,6 +52,9 @@ inline Member Member::from_json(const nlohmann::json& j) {
             if (r.is_string()) m.roles.push_back(r.get<std::string>());
         }
     }
+    if (j.contains("joined_at") && j["joined_at"].is_string()) {
+        m.joined_at = j["joined_at"].get<std::string>();
+    }
     return m;
 }
 
@@ -61,6 +65,7 @@ inline nlohmann::json Member::to_json() const {
     if (nickname) j["nickname"] = *nickname;
     if (avatar) j["avatar"] = *avatar;
     j["roles"] = roles;
+    if (!joined_at.empty()) j["joined_at"] = joined_at;
     return j;
 }
 
