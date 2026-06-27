@@ -13,6 +13,7 @@ struct Member {
     std::optional<std::string> avatar;
     std::vector<std::string> roles;
     std::string joined_at;
+    std::optional<std::string> timeout;            // ISO timestamp representing when the member's timeout ends
     nlohmann::json raw;                            // original parsed object
 
     static Member from_json(const nlohmann::json& j);
@@ -59,6 +60,9 @@ inline Member Member::from_json(const nlohmann::json& j) {
     if (j.contains("joined_at") && j["joined_at"].is_string()) {
         m.joined_at = j["joined_at"].get<std::string>();
     }
+    if (j.contains("timeout") && j["timeout"].is_string()) {
+        m.timeout = j["timeout"].get<std::string>();
+    }
     return m;
 }
 
@@ -70,6 +74,7 @@ inline nlohmann::json Member::to_json() const {
     if (avatar) j["avatar"] = *avatar;
     j["roles"] = roles;
     if (!joined_at.empty()) j["joined_at"] = joined_at;
+    if (timeout) j["timeout"] = *timeout;
     return j;
 }
 

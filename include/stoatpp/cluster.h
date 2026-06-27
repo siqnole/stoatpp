@@ -70,6 +70,11 @@ public:
                       const std::string& new_content,
                       std::function<void(models::Message, bool)> callback = nullptr);
 
+    void edit_message(const std::string& channel_id,
+                      const std::string& message_id,
+                      const models::MessagePayload& payload,
+                      std::function<void(models::Message, bool)> callback = nullptr);
+
     void delete_message(const std::string& channel_id,
                         const std::string& message_id,
                         std::function<void(bool)> callback = nullptr);
@@ -79,8 +84,72 @@ public:
                           const std::string& emoji_id,
                           std::function<void(bool)> callback = nullptr);
 
+    void unreact_from_message(const std::string& channel_id,
+                              const std::string& message_id,
+                              const std::string& emoji_id,
+                              const std::optional<std::string>& user_id = {},
+                              std::function<void(bool)> callback = nullptr);
+
     void begin_typing(const std::string& channel_id);
     void end_typing(const std::string& channel_id);
+
+    void ban_user(const std::string& server_id,
+                  const std::string& user_id,
+                  const std::string& reason = "",
+                  std::function<void(bool)> callback = nullptr);
+
+    void unban_user(const std::string& server_id,
+                    const std::string& user_id,
+                    std::function<void(bool)> callback = nullptr);
+
+    void kick_member(const std::string& server_id,
+                     const std::string& user_id,
+                     std::function<void(bool)> callback = nullptr);
+
+    void timeout_member(const std::string& server_id,
+                        const std::string& user_id,
+                        const std::string& duration_iso,
+                        std::function<void(bool)> callback = nullptr);
+
+    void remove_timeout(const std::string& server_id,
+                        const std::string& user_id,
+                        std::function<void(bool)> callback = nullptr);
+
+    void create_role(const std::string& server_id,
+                     const std::string& name,
+                     std::function<void(models::Role, bool)> callback = nullptr);
+
+    void delete_role(const std::string& server_id,
+                     const std::string& role_id,
+                     std::function<void(bool)> callback = nullptr);
+
+    void add_role_to_member(const std::string& server_id,
+                            const std::string& user_id,
+                            const std::string& role_id,
+                            std::function<void(bool)> callback = nullptr);
+
+    void remove_role_from_member(const std::string& server_id,
+                                 const std::string& user_id,
+                                 const std::string& role_id,
+                                 std::function<void(bool)> callback = nullptr);
+
+    void get_member_count(const std::string& server_id,
+                          std::function<void(int count, bool success)> callback);
+
+    void fetch_server_invites(const std::string& server_id,
+                              std::function<void(std::vector<models::Invite> invites, bool success)> callback);
+
+    void create_invite(const std::string& channel_id,
+                       std::function<void(models::Invite invite, bool success)> callback);
+
+    void fetch_channel_permissions(const std::string& channel_id,
+                                   std::function<void(nlohmann::json permissions, bool success)> callback);
+
+    void set_channel_permissions(const std::string& channel_id,
+                                 const std::string& role_id,
+                                 int64_t allow_mask,
+                                 int64_t deny_mask,
+                                 std::function<void(bool success)> callback = nullptr);
 
     rest_client& rest();
     gateway& ws();

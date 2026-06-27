@@ -58,6 +58,34 @@ bot.register_command("say", [](stoatpp::cluster& cl, const stoatpp::events::Mess
 });
 ```
 
+## message actions
+
+```cpp
+// send simple message
+bot.send_message("channel_id", "hello");
+
+// send rich message with embeds
+stoatpp::models::MessagePayload payload;
+payload.content = "embed test";
+payload.embeds.push_back({{"title", "hello"}});
+bot.send_message("channel_id", payload);
+
+// edit content
+bot.edit_message("channel_id", "message_id", "new content");
+
+// edit with payload (embeds/content)
+bot.edit_message("channel_id", "message_id", payload);
+
+// delete message
+bot.delete_message("channel_id", "message_id");
+
+// add reaction
+bot.react_to_message("channel_id", "message_id", "⬅");
+
+// remove reaction (user_id optional)
+bot.unreact_from_message("channel_id", "message_id", "⬅", "user_id");
+```
+
 ## cache
 
 thread-safe local cache query (returns `std::optional<T>`):
@@ -82,6 +110,82 @@ bot.fetch_member("server_id", "user_id", [](stoatpp::models::Member member, bool
     if (success) {
         std::cout << member.nickname.value_or("") << std::endl;
     }
+});
+```
+
+## moderation
+
+moderation helpers run asynchronously on the `bot` instance:
+
+```cpp
+// ban a user
+bot.ban_user("server_id", "user_id", "reason", [](bool success) {
+    if (success) std::cout << "banned" << std::endl;
+});
+
+// unban a user
+bot.unban_user("server_id", "user_id", [](bool success) {
+    if (success) std::cout << "unbanned" << std::endl;
+});
+
+// kick a user
+bot.kick_member("server_id", "user_id", [](bool success) {
+    if (success) std::cout << "kicked" << std::endl;
+});
+
+// timeout a user (takes an ISO timestamp when the timeout ends)
+bot.timeout_member("server_id", "user_id", "2034-03-24T09:47:39.470Z", [](bool success) {
+    if (success) std::cout << "timed out" << std::endl;
+});
+
+// remove timeout
+bot.remove_timeout("server_id", "user_id", [](bool success) {
+    if (success) std::cout << "timeout removed" << std::endl;
+});
+
+// create server role
+bot.create_role("server_id", "moderator", [](stoatpp::models::Role role, bool success) {
+    if (success) std::cout << "created role: " << role.name << std::endl;
+});
+
+// delete server role
+bot.delete_role("server_id", "role_id", [](bool success) {
+    if (success) std::cout << "role deleted" << std::endl;
+});
+
+// add a role to a member
+bot.add_role_to_member("server_id", "user_id", "role_id", [](bool success) {
+    if (success) std::cout << "role added" << std::endl;
+});
+
+// remove a role from a member
+bot.remove_role_from_member("server_id", "user_id", "role_id", [](bool success) {
+    if (success) std::cout << "role removed" << std::endl;
+});
+
+// get member count of a server
+bot.get_member_count("server_id", [](int count, bool success) {
+    if (success) std::cout << "members: " << count << std::endl;
+});
+
+// fetch all server invites
+bot.fetch_server_invites("server_id", [](std::vector<stoatpp::models::Invite> invites, bool success) {
+    if (success) std::cout << invites.size() << " invites" << std::endl;
+});
+
+// create a channel invite
+bot.create_invite("channel_id", [](stoatpp::models::Invite invite, bool success) {
+    if (success) std::cout << "invite code: " << invite.code << std::endl;
+});
+
+// fetch channel permission overrides
+bot.fetch_channel_permissions("channel_id", [](nlohmann::json permissions, bool success) {
+    if (success) std::cout << permissions.dump() << std::endl;
+});
+
+// set channel permissions for a role
+bot.set_channel_permissions("channel_id", "role_id", 1024, 0, [](bool success) {
+    if (success) std::cout << "permissions updated" << std::endl;
 });
 ```
 
