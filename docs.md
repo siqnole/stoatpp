@@ -178,6 +178,16 @@ bot.create_invite("channel_id", [](stoatpp::models::Invite invite, bool success)
     if (success) std::cout << "invite code: " << invite.code << std::endl;
 });
 
+// set channel slowmode (in seconds)
+bot.set_slowmode("channel_id", 5, [](bool success) {
+    if (success) std::cout << "slowmode set" << std::endl;
+});
+
+// clear channel slowmode
+bot.clear_slowmode("channel_id", [](bool success) {
+    if (success) std::cout << "slowmode cleared" << std::endl;
+});
+
 // fetch channel permission overrides
 bot.fetch_channel_permissions("channel_id", [](nlohmann::json permissions, bool success) {
     if (success) std::cout << permissions.dump() << std::endl;
