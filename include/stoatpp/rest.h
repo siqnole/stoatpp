@@ -32,7 +32,7 @@ public:
     Response post(const std::string& path, const nlohmann::json& body = {});
     Response patch(const std::string& path, const nlohmann::json& body = {});
     Response put(const std::string& path, const nlohmann::json& body = {});
-    Response del(const std::string& path);
+    Response del(const std::string& path, const nlohmann::json& body = {});
 
     Response upload_file(const std::string& path,
                          const std::string& filename,

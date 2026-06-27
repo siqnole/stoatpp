@@ -87,7 +87,11 @@ static rest_client::Response perform_request(
         } else if (method == "PUT") {
             res = cli.Put(path, headers, req_body_str, "application/json");
         } else if (method == "DELETE") {
-            res = cli.Delete(path, headers);
+            if (req_body_str.empty()) {
+                res = cli.Delete(path, headers);
+            } else {
+                res = cli.Delete(path, headers, req_body_str, "application/json");
+            }
         } else {
             throw StoatException("Unsupported HTTP method: " + method);
         }
@@ -172,8 +176,8 @@ rest_client::Response rest_client::put(const std::string& path, const nlohmann::
     return perform_request("PUT", path, body, token_, config_, ratelimiter_, pre_request_hook_);
 }
 
-rest_client::Response rest_client::del(const std::string& path) {
-    return perform_request("DELETE", path, nullptr, token_, config_, ratelimiter_, pre_request_hook_);
+rest_client::Response rest_client::del(const std::string& path, const nlohmann::json& body) {
+    return perform_request("DELETE", path, body, token_, config_, ratelimiter_, pre_request_hook_);
 }
 
 rest_client::Response rest_client::upload_file(const std::string& path,
@@ -299,7 +303,7 @@ rest_client::Response rest_client::search_messages(const std::string& channel_id
 rest_client::Response rest_client::delete_messages_bulk(const std::string& channel_id, const std::vector<std::string>& message_ids) {
     nlohmann::json body;
     body["ids"] = message_ids;
-    return post("/channels/" + channel_id + "/messages/bulk", body);
+    return del("/channels/" + channel_id + "/messages/bulk", body);
 }
 
 rest_client::Response rest_client::remove_reaction(const std::string& channel_id, const std::string& message_id, const std::string& emoji, const std::optional<std::string>& user_id) {
