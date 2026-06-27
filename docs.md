@@ -232,6 +232,13 @@ bot.rest().delete_webhook("webhook_id");
 stoatpp::models::WebhookExecutePayload wh;
 wh.content = "hello";
 bot.rest().execute_webhook("webhook_id", "token", wh);
+bot.rest().execute_webhook_with_token("webhook_id", "token", wh);
+bot.rest().get_webhook_with_token("webhook_id", "token");
+bot.rest().edit_webhook_with_token("webhook_id", "token", {{"name", "renamed"}});
+bot.rest().delete_webhook_with_token("webhook_id", "token");
+bot.rest().edit_webhook_message("webhook_id", "token", "message_id", {{"content", "new content"}});
+bot.rest().delete_webhook_message("webhook_id", "token", "message_id");
+bot.rest().execute_github_webhook("webhook_id", "token", {{"action", "opened"}});
 
 bot.rest().get_attachment_metadata("attachment_id");
 ```
@@ -250,9 +257,17 @@ bot.rest().delete_messages_bulk("channel_id", {"id1", "id2"});
 bot.rest().pin_message("channel_id", "msg_id");
 bot.rest().unpin_message("channel_id", "msg_id");
 bot.rest().get_pinned_messages("channel_id");
+bot.rest().add_reaction("channel_id", "msg_id", "👍");
+bot.rest().remove_reaction("channel_id", "msg_id", "👍");
 bot.rest().clear_reactions("channel_id", "msg_id");
 bot.rest().acknowledge_message("channel_id", "msg_id");
 bot.rest().acknowledge_channel("channel_id");
+```
+
+### channels & permissions
+```cpp
+bot.rest().get_channel("channel_id");
+bot.rest().set_channel_default_permission("channel_id", 1024);
 ```
 
 ### servers & moderation
@@ -276,6 +291,8 @@ bot.rest().create_role("server_id", "admin");
 bot.rest().get_user("user_id");
 bot.rest().get_user_profile("user_id");
 bot.rest().get_user_default_avatar("user_id");
+bot.rest().get_user_flags("user_id");
+bot.rest().change_username("new_username");
 ```
 
 ### auth, mfa & onboarding
@@ -291,6 +308,17 @@ bot.rest().regenerate_mfa_recovery_codes();
 
 bot.rest().get_onboarding_status();
 bot.rest().complete_onboarding("my_username");
+```
+
+### groups, voice & bots
+```cpp
+bot.rest().create_group("my group", {"user_1", "user_2"});
+bot.rest().get_group_members("channel_id");
+bot.rest().join_voice_call("channel_id");
+bot.rest().end_voice_ring("channel_id", "user_id");
+
+bot.rest().get_owned_bots();
+bot.rest().get_bot_invite_info("bot_id");
 ```
 
 ### invites
