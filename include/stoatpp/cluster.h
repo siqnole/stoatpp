@@ -19,6 +19,16 @@
 namespace stoatpp {
 
 class bot_module;
+class cluster;
+
+struct Command {
+    std::string name;
+    std::vector<std::string> aliases;
+    std::string description;
+    std::string usage;
+    std::vector<std::string> args;
+    std::function<void(cluster&, const events::Message&, const std::vector<std::string>&)> callback;
+};
 
 class cluster {
 public:
@@ -175,6 +185,7 @@ public:
 
     // Cog modules and Commands APIs
     void use(std::unique_ptr<bot_module> module);
+    void register_command(const Command& cmd);
     void register_command(const std::string& name,
                           std::function<void(cluster&, const events::Message&, const std::vector<std::string>&)> cb);
     void register_command(const std::string& name,
@@ -200,7 +211,16 @@ private:
     // Cogs & Commands state
     std::vector<std::unique_ptr<bot_module>> modules_;
     std::unordered_map<std::string, std::function<void(cluster&, const events::Message&, const std::vector<std::string>&)>> commands_;
+    std::vector<Command> registered_commands_;
     std::atomic<bool> running_{false};
+
+    struct HelpSession {
+        int current_page = 0;
+        int max_pages = 1;
+        std::string user_id;
+    };
+    std::unordered_map<std::string, HelpSession> help_sessions_;
+    mutable std::mutex help_sessions_mutex_;
 };
 
 } // namespace stoatpp

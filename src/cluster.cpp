@@ -31,25 +31,148 @@ cluster::cluster(const std::string& token, ClientConfig config)
 
     if (config_.enable_default_help) {
         register_command("help", [this](cluster& bot, const events::Message& msg, const std::vector<std::string>& args) {
+            std::vector<Command> cmds = registered_commands_;
+            std::sort(cmds.begin(), cmds.end(), [](const Command& a, const Command& b) {
+                return a.name < b.name;
+            });
+
+            int max_pages = (cmds.size() + 2) / 3;
+            if (max_pages == 0) max_pages = 1;
+
             stoatpp::models::MessagePayload payload;
             nlohmann::json embed = nlohmann::json::object();
-            embed["title"] = "stoat++ default help menu";
             embed["colour"] = config_.default_help_color;
+            embed["title"] = "stoat++ default help menu (page 1 of " + std::to_string(max_pages) + ")";
 
-            std::string desc = "here is a list of all registered commands:\n";
-            std::vector<std::string> names;
-            for (const auto& [name, cb] : commands_) {
-                names.push_back(name);
-            }
-            std::sort(names.begin(), names.end());
+            std::string desc = "here is a list of all registered commands:\n\n";
+            for (size_t i = 0; i < 3 && i < cmds.size(); ++i) {
+                const auto& cmd = cmds[i];
+                desc += "• **" + config_.command_prefix + cmd.name + "**";
+                if (!cmd.aliases.empty()) {
+                    desc += " (aliases: ";
+                    for (size_t a = 0; a < cmd.aliases.size(); ++a) {
+                        desc += "`" + config_.command_prefix + cmd.aliases[a] + "`" + (a + 1 < cmd.aliases.size() ? ", " : "");
+                    }
+                    desc += ")";
+                }
+                desc += "\n";
 
-            for (const auto& name : names) {
-                desc += "• `" + config_.command_prefix + name + "`\n";
+                std::string syntax = config_.command_prefix + cmd.name;
+                if (!cmd.args.empty()) {
+                    for (const auto& arg : cmd.args) {
+                        syntax += " " + arg;
+                    }
+                } else if (!cmd.usage.empty()) {
+                    syntax = cmd.usage;
+                }
+                desc += "  *syntax:* `" + syntax + "`\n";
+
+                if (!cmd.description.empty()) {
+                    desc += "  *description:* " + cmd.description + "\n";
+                }
+                desc += "\n";
             }
             embed["description"] = desc;
             payload.embeds.push_back(embed);
-            bot.send_message(msg.channel_id, payload);
+
+            bot.send_message(msg.channel_id, payload, [this, msg, max_pages](stoatpp::models::Message res, bool success) {
+                if (success && max_pages > 1) {
+                    {
+                        std::lock_guard<std::mutex> lock(help_sessions_mutex_);
+                        help_sessions_[res.id] = {0, max_pages, msg.author.id};
+                    }
+                    react_to_message(msg.channel_id, res.id, "⬅");
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                    react_to_message(msg.channel_id, res.id, "➡");
+                }
+            });
         });
+
+        this->on_message_react([this](const events::MessageReact& e) {
+            std::unique_lock<std::mutex> lock(help_sessions_mutex_);
+            auto it = help_sessions_.find(e.id);
+            if (it != help_sessions_.end()) {
+                auto& session = it->second;
+                if (e.user_id == current_user().id) return;
+                if (e.user_id != session.user_id) {
+                    lock.unlock();
+                    unreact_from_message(e.channel_id, e.id, e.emoji_id, e.user_id);
+                    return;
+                }
+
+                bool page_changed = false;
+                if (e.emoji_id == "⬅️" || e.emoji_id == "◀" || e.emoji_id == "⬅") {
+                    if (session.current_page > 0) {
+                        session.current_page--;
+                    } else {
+                        session.current_page = session.max_pages - 1;
+                    }
+                    page_changed = true;
+                } else if (e.emoji_id == "➡️" || e.emoji_id == "▶" || e.emoji_id == "➡") {
+                    if (session.current_page < session.max_pages - 1) {
+                        session.current_page++;
+                    } else {
+                        session.current_page = 0;
+                    }
+                    page_changed = true;
+                }
+
+                if (page_changed) {
+                    int page = session.current_page;
+                    int max_pages = session.max_pages;
+                    lock.unlock();
+
+                    std::vector<Command> cmds = registered_commands_;
+                    std::sort(cmds.begin(), cmds.end(), [](const Command& a, const Command& b) {
+                        return a.name < b.name;
+                    });
+
+                    stoatpp::models::MessagePayload payload;
+                    payload.content = " ";
+                    nlohmann::json embed = nlohmann::json::object();
+                    embed["colour"] = config_.default_help_color;
+                    embed["title"] = "stoat++ default help menu (page " + std::to_string(page + 1) + " of " + std::to_string(max_pages) + ")";
+
+                    std::string desc = "here is a list of all registered commands:\n\n";
+                    size_t start = page * 3;
+                    for (size_t i = start; i < start + 3 && i < cmds.size(); ++i) {
+                        const auto& cmd = cmds[i];
+                        desc += "• **" + config_.command_prefix + cmd.name + "**";
+                        if (!cmd.aliases.empty()) {
+                            desc += " (aliases: ";
+                            for (size_t a = 0; a < cmd.aliases.size(); ++a) {
+                                desc += "`" + config_.command_prefix + cmd.aliases[a] + "`" + (a + 1 < cmd.aliases.size() ? ", " : "");
+                            }
+                            desc += ")";
+                        }
+                        desc += "\n";
+
+                        std::string syntax = config_.command_prefix + cmd.name;
+                        if (!cmd.args.empty()) {
+                            for (const auto& arg : cmd.args) {
+                                syntax += " " + arg;
+                            }
+                        } else if (!cmd.usage.empty()) {
+                            syntax = cmd.usage;
+                        }
+                        desc += "  *syntax:* `" + syntax + "`\n";
+
+                        if (!cmd.description.empty()) {
+                            desc += "  *description:* " + cmd.description + "\n";
+                        }
+                        desc += "\n";
+                    }
+                    embed["description"] = desc;
+                    payload.embeds.push_back(embed);
+
+                    edit_message(e.channel_id, e.id, payload, [this, e](auto, bool) {
+                        unreact_from_message(e.channel_id, e.id, e.emoji_id, e.user_id);
+                    });
+                }
+            }
+        });
+
+
     }
 
     // 1. Automatic prefix-based command routing
@@ -768,18 +891,30 @@ void cluster::use(std::unique_ptr<bot_module> module) {
     }
 }
 
+void cluster::register_command(const Command& cmd) {
+    registered_commands_.push_back(cmd);
+    commands_[cmd.name] = cmd.callback;
+    for (const auto& alias : cmd.aliases) {
+        commands_[alias] = cmd.callback;
+    }
+}
+
 void cluster::register_command(const std::string& name,
                               std::function<void(cluster&, const events::Message&, const std::vector<std::string>&)> cb) {
-    commands_[name] = cb;
+    Command cmd;
+    cmd.name = name;
+    cmd.callback = cb;
+    register_command(cmd);
 }
 
 void cluster::register_command(const std::string& name,
                               const std::vector<std::string>& aliases,
                               std::function<void(cluster&, const events::Message&, const std::vector<std::string>&)> cb) {
-    register_command(name, cb);
-    for (const auto& alias : aliases) {
-        register_command(alias, cb);
-    }
+    Command cmd;
+    cmd.name = name;
+    cmd.aliases = aliases;
+    cmd.callback = cb;
+    register_command(cmd);
 }
 
 void cluster::fetch_user(const std::string& user_id, std::function<void(models::User, bool success)> callback) {
