@@ -530,8 +530,14 @@ void cluster::get_member_count(const std::string& server_id,
     std::thread([this, server_id, callback]() {
         try {
             auto res = rest_.get_server_members(server_id);
-            if (res.success() && res.body.is_array()) {
-                if (callback) callback(static_cast<int>(res.body.size()), true);
+            if (res.success()) {
+                if (res.body.is_array()) {
+                    if (callback) callback(static_cast<int>(res.body.size()), true);
+                } else if (res.body.is_object() && res.body.contains("members") && res.body["members"].is_array()) {
+                    if (callback) callback(static_cast<int>(res.body["members"].size()), true);
+                } else {
+                    if (callback) callback(0, false);
+                }
             } else {
                 if (callback) callback(0, false);
             }
