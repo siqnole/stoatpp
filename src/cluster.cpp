@@ -137,7 +137,7 @@ cluster::cluster(const std::string& token, ClientConfig config)
                         std::shared_lock<std::shared_mutex> cache_lock(cache_mutex_);
                         auto ch_it = channel_cache_.find(e.channel_id);
                         if (ch_it != channel_cache_.end()) {
-                            dummy_msg.server_id = ch_it->second.server_id.value_or("");
+                            dummy_msg.server_id = ch_it->second.server.value_or("");
                         }
                     }
 
