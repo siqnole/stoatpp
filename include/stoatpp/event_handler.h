@@ -30,6 +30,7 @@ struct Message {
     std::string content;
     std::string nonce;
     bool edited = false;
+    std::string prefix;
     nlohmann::json raw;      // full raw JSON always available
 };
 

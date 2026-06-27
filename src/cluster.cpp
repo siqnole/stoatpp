@@ -248,7 +248,9 @@ cluster::cluster(const std::string& token, ClientConfig config)
 
         auto it = commands_.find(cmd);
         if (it != commands_.end()) {
-            it->second(*this, msg, args);
+            events::Message dispatched_msg = msg;
+            dispatched_msg.prefix = matched_prefix;
+            it->second(*this, dispatched_msg, args);
         }
     });
 
@@ -429,6 +431,24 @@ void cluster::send_message(const std::string& channel_id,
     models::MessagePayload payload;
     payload.content = content;
     send_message(channel_id, payload, callback);
+}
+
+void cluster::send_reply(const std::string& channel_id,
+                         const std::string& message_id,
+                         const std::string& content,
+                         bool mention,
+                         std::function<void(models::Message, bool success)> callback) {
+    models::MessagePayload payload;
+    payload.content = content;
+    payload.replies.push_back({message_id, mention});
+    send_message(channel_id, payload, callback);
+}
+
+void cluster::send_reply(const events::Message& to_message,
+                         const std::string& content,
+                         bool mention,
+                         std::function<void(models::Message, bool success)> callback) {
+    send_reply(to_message.channel_id, to_message.id, content, mention, callback);
 }
 
 void cluster::send_message(const std::string& channel_id,

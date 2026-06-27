@@ -76,6 +76,17 @@ public:
                       const models::MessagePayload& payload,
                       std::function<void(models::Message, bool)> callback = nullptr);
 
+    void send_reply(const std::string& channel_id,
+                    const std::string& message_id,
+                    const std::string& content,
+                    bool mention = true,
+                    std::function<void(models::Message, bool success)> callback = nullptr);
+
+    void send_reply(const events::Message& to_message,
+                    const std::string& content,
+                    bool mention = true,
+                    std::function<void(models::Message, bool success)> callback = nullptr);
+
     void edit_message(const std::string& channel_id,
                       const std::string& message_id,
                       const std::string& new_content,
