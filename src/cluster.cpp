@@ -16,6 +16,16 @@ cluster::cluster(const std::string& token, ClientConfig config)
 
     // 1. Automatic prefix-based command routing
     this->on_message([this](const events::Message& msg) {
+        if (!msg.author.username.empty()) {
+            std::lock_guard<std::shared_mutex> lock(cache_mutex_);
+            user_cache_[msg.author.id] = msg.author;
+        }
+        if (msg.raw.contains("user") && msg.raw["user"].is_object()) {
+            auto usr = models::User::from_json(msg.raw["user"]);
+            std::lock_guard<std::shared_mutex> lock(cache_mutex_);
+            user_cache_[usr.id] = usr;
+        }
+
         const std::string& prefix = config_.command_prefix;
         if (msg.content.rfind(prefix, 0) != 0) return;
 
@@ -321,6 +331,57 @@ void cluster::use(std::unique_ptr<bot_module> module) {
 void cluster::register_command(const std::string& name,
                               std::function<void(cluster&, const events::Message&, const std::vector<std::string>&)> cb) {
     commands_[name] = cb;
+}
+
+void cluster::register_command(const std::string& name,
+                              const std::vector<std::string>& aliases,
+                              std::function<void(cluster&, const events::Message&, const std::vector<std::string>&)> cb) {
+    register_command(name, cb);
+    for (const auto& alias : aliases) {
+        register_command(alias, cb);
+    }
+}
+
+void cluster::fetch_user(const std::string& user_id, std::function<void(models::User, bool success)> callback) {
+    auto cached = get_user(user_id);
+    if (cached) {
+        if (callback) callback(*cached, true);
+        return;
+    }
+
+    std::thread([this, user_id, callback]() {
+        try {
+            auto res = rest_.get("/users/" + user_id);
+            if (res.success()) {
+                auto usr = models::User::from_json(res.body);
+                {
+                    std::lock_guard<std::shared_mutex> lock(cache_mutex_);
+                    user_cache_[usr.id] = usr;
+                }
+                if (callback) callback(usr, true);
+            } else {
+                if (callback) callback(models::User{}, false);
+            }
+        } catch (...) {
+            if (callback) callback(models::User{}, false);
+        }
+    }).detach();
+}
+
+void cluster::fetch_member(const std::string& server_id, const std::string& user_id, std::function<void(models::Member, bool success)> callback) {
+    std::thread([this, server_id, user_id, callback]() {
+        try {
+            auto res = rest_.get("/servers/" + server_id + "/members/" + user_id);
+            if (res.success()) {
+                auto mem = models::Member::from_json(res.body);
+                if (callback) callback(mem, true);
+            } else {
+                if (callback) callback(models::Member{}, false);
+            }
+        } catch (...) {
+            if (callback) callback(models::Member{}, false);
+        }
+    }).detach();
 }
 
 } // namespace stoatpp

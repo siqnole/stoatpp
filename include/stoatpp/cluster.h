@@ -90,6 +90,12 @@ public:
     void use(std::unique_ptr<bot_module> module);
     void register_command(const std::string& name,
                           std::function<void(cluster&, const events::Message&, const std::vector<std::string>&)> cb);
+    void register_command(const std::string& name,
+                          const std::vector<std::string>& aliases,
+                          std::function<void(cluster&, const events::Message&, const std::vector<std::string>&)> cb);
+
+    void fetch_user(const std::string& user_id, std::function<void(models::User, bool success)> callback);
+    void fetch_member(const std::string& server_id, const std::string& user_id, std::function<void(models::Member, bool success)> callback);
 
 private:
     std::string      token_;

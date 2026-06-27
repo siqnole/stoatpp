@@ -30,6 +30,7 @@ struct ClientConfig {
     // --- Endpoints (override for self-hosted instances) ---
     std::string api_base_url   = "https://api.stoat.chat";
     std::string ws_url         = "wss://events.stoat.chat";
+    std::string cdn_url        = "https://cdn.stoatusercontent.com";
     int         ws_version     = 1;                  // ?version=1
     std::string ws_format      = "json";             // "json" or "msgpack"
 
