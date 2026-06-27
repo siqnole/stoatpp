@@ -1,4 +1,5 @@
 #include "stoatpp/gateway.h"
+#include "stoatpp/rest.h"
 #include "stoatpp/utils/logger.h"
 #include <ixwebsocket/IXWebSocket.h>
 #include <thread>
@@ -17,6 +18,7 @@ struct gateway::impl {
     std::mutex ping_mutex;
     std::atomic<bool> authenticated{false};
     std::atomic<int64_t> latency_ms{0};
+    models::User self_user;
 };
 
 gateway::gateway(const std::string& token, const ClientConfig& config,
@@ -44,6 +46,19 @@ gateway::~gateway() {
 }
 
 void gateway::connect() {
+    try {
+        rest_client rest(token_, config_);
+        auto res = rest.get("/users/@me");
+        if (res.success()) {
+            pimpl_->self_user = models::User::from_json(res.body);
+            utils::logger::log(LogLevel::INFO, "Gateway fetched self user: " + pimpl_->self_user.username + " (" + pimpl_->self_user.id + ")", config_);
+        } else {
+            utils::logger::log(LogLevel::ERROR, "Gateway failed to fetch self user: " + res.error_message(), config_);
+        }
+    } catch (const std::exception& e) {
+        utils::logger::log(LogLevel::ERROR, "Gateway exception fetching self user: " + std::string(e.what()), config_);
+    }
+
     std::string url = config_.ws_url;
     if (url.empty() || url.back() != '/') {
         url += "/";
@@ -225,7 +240,27 @@ void gateway::handle_event(const nlohmann::json& j) {
     
     if (type == "Ready") {
         events::Ready ev;
-        if (j.contains("user")) ev.user = models::User::from_json(j["user"]);
+        if (j.contains("user")) {
+            ev.user = models::User::from_json(j["user"]);
+        } else {
+            bool found_self = false;
+            if (j.contains("users") && j["users"].is_array() && !pimpl_->self_user.id.empty()) {
+                for (const auto& u : j["users"]) {
+                    std::string uid;
+                    if (u.contains("id") && u["id"].is_string()) uid = u["id"].get<std::string>();
+                    else if (u.contains("_id") && u["_id"].is_string()) uid = u["_id"].get<std::string>();
+                    
+                    if (uid == pimpl_->self_user.id) {
+                        ev.user = models::User::from_json(u);
+                        found_self = true;
+                        break;
+                    }
+                }
+            }
+            if (!found_self) {
+                ev.user = pimpl_->self_user;
+            }
+        }
         
         if (j.contains("servers") && j["servers"].is_array()) {
             for (const auto& s : j["servers"]) {
@@ -263,7 +298,9 @@ void gateway::handle_event(const nlohmann::json& j) {
             ev.server_id = j["member"]["_id"]["server"].get<std::string>();
         }
         
-        if (j.contains("author")) {
+        if (j.contains("user") && j["user"].is_object()) {
+            ev.author = models::User::from_json(j["user"]);
+        } else if (j.contains("author")) {
             if (j["author"].is_object()) {
                 ev.author = models::User::from_json(j["author"]);
             } else if (j["author"].is_string()) {
