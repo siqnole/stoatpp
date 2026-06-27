@@ -581,6 +581,37 @@ void cluster::create_invite(const std::string& channel_id,
     }).detach();
 }
 
+void cluster::set_slowmode(const std::string& channel_id,
+                          int seconds,
+                          std::function<void(bool)> callback) {
+    std::thread([this, channel_id, seconds, callback]() {
+        try {
+            nlohmann::json fields;
+            fields["slowmode"] = seconds;
+            auto res = rest_.edit_channel(channel_id, fields);
+            if (callback) callback(res.success());
+        } catch (const std::exception& e) {
+            utils::logger::log(LogLevel::ERROR, "Exception in set_slowmode: " + std::string(e.what()), config_);
+            if (callback) callback(false);
+        }
+    }).detach();
+}
+
+void cluster::clear_slowmode(const std::string& channel_id,
+                            std::function<void(bool)> callback) {
+    std::thread([this, channel_id, callback]() {
+        try {
+            nlohmann::json fields;
+            fields["slowmode"] = 0;
+            auto res = rest_.edit_channel(channel_id, fields);
+            if (callback) callback(res.success());
+        } catch (const std::exception& e) {
+            utils::logger::log(LogLevel::ERROR, "Exception in clear_slowmode: " + std::string(e.what()), config_);
+            if (callback) callback(false);
+        }
+    }).detach();
+}
+
 void cluster::fetch_channel_permissions(const std::string& channel_id,
                                         std::function<void(nlohmann::json, bool)> callback) {
     std::thread([this, channel_id, callback]() {

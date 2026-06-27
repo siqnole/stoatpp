@@ -308,6 +308,10 @@ void gateway::handle_event(const nlohmann::json& j) {
             }
         }
         
+        if (j.contains("webhook") && j["webhook"].is_object() && j["webhook"].contains("name")) {
+            ev.author.username = j["webhook"]["name"].get<std::string>();
+        }
+
         if (j.contains("content")) ev.content = j["content"].get<std::string>();
         if (j.contains("nonce")) ev.nonce = j["nonce"].get<std::string>();
         if (j.contains("edited") && j["edited"].is_boolean()) ev.edited = j["edited"].get<bool>();
@@ -320,7 +324,8 @@ void gateway::handle_event(const nlohmann::json& j) {
     if (type == "MessageUpdate") {
         events::MessageUpdate ev;
         if (j.contains("id")) ev.id = j["id"].get<std::string>();
-        if (j.contains("channel")) ev.channel_id = j["channel"].get<std::string>();
+        if (j.contains("channel_id")) ev.channel_id = j["channel_id"].get<std::string>();
+        else if (j.contains("channel")) ev.channel_id = j["channel"].get<std::string>();
         if (j.contains("data")) ev.data = j["data"];
         dispatcher_.dispatch_message_update(ev);
         return;
@@ -329,7 +334,8 @@ void gateway::handle_event(const nlohmann::json& j) {
     if (type == "MessageDelete") {
         events::MessageDelete ev;
         if (j.contains("id")) ev.id = j["id"].get<std::string>();
-        if (j.contains("channel")) ev.channel_id = j["channel"].get<std::string>();
+        if (j.contains("channel_id")) ev.channel_id = j["channel_id"].get<std::string>();
+        else if (j.contains("channel")) ev.channel_id = j["channel"].get<std::string>();
         dispatcher_.dispatch_message_delete(ev);
         return;
     }
@@ -337,7 +343,8 @@ void gateway::handle_event(const nlohmann::json& j) {
     if (type == "MessageReact") {
         events::MessageReact ev;
         if (j.contains("id")) ev.id = j["id"].get<std::string>();
-        if (j.contains("channel")) ev.channel_id = j["channel"].get<std::string>();
+        if (j.contains("channel_id")) ev.channel_id = j["channel_id"].get<std::string>();
+        else if (j.contains("channel")) ev.channel_id = j["channel"].get<std::string>();
         if (j.contains("user_id")) ev.user_id = j["user_id"].get<std::string>();
         if (j.contains("emoji_id")) ev.emoji_id = j["emoji_id"].get<std::string>();
         dispatcher_.dispatch_message_react(ev);
@@ -347,7 +354,8 @@ void gateway::handle_event(const nlohmann::json& j) {
     if (type == "MessageUnreact") {
         events::MessageUnreact ev;
         if (j.contains("id")) ev.id = j["id"].get<std::string>();
-        if (j.contains("channel")) ev.channel_id = j["channel"].get<std::string>();
+        if (j.contains("channel_id")) ev.channel_id = j["channel_id"].get<std::string>();
+        else if (j.contains("channel")) ev.channel_id = j["channel"].get<std::string>();
         if (j.contains("user_id")) ev.user_id = j["user_id"].get<std::string>();
         if (j.contains("emoji_id")) ev.emoji_id = j["emoji_id"].get<std::string>();
         dispatcher_.dispatch_message_unreact(ev);

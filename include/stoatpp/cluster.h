@@ -142,6 +142,13 @@ public:
     void create_invite(const std::string& channel_id,
                        std::function<void(models::Invite invite, bool success)> callback);
 
+    void set_slowmode(const std::string& channel_id,
+                      int seconds,
+                      std::function<void(bool)> callback = nullptr);
+
+    void clear_slowmode(const std::string& channel_id,
+                        std::function<void(bool)> callback = nullptr);
+
     void fetch_channel_permissions(const std::string& channel_id,
                                    std::function<void(nlohmann::json permissions, bool success)> callback);
 
