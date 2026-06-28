@@ -5,6 +5,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 option(STOATPP_BUILD_EXAMPLES "Build example bots" ON)
+option(STOATPP_BUILD_CLIENT "Build the chat client application" ON)
 option(STOATPP_USE_BOOST_BEAST "Use Boost.Beast instead of ixwebsocket" OFF)
 
 include(FetchContent)
@@ -70,3 +71,9 @@ if(STOATPP_BUILD_EXAMPLES)
     add_subdirectory(examples/ping_bot)
     add_subdirectory(examples/full_bot)
 endif()
+
+# Client App
+if(STOATPP_BUILD_CLIENT)
+    add_subdirectory(client)
+endif()
+
