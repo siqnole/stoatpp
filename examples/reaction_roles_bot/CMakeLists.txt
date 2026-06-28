@@ -1,0 +1,2 @@
+add_executable(reaction_roles_bot main.cpp)
+target_link_libraries(reaction_roles_bot PRIVATE stoatpp)

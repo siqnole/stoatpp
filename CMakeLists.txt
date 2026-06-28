@@ -70,6 +70,9 @@ endif()
 if(STOATPP_BUILD_EXAMPLES)
     add_subdirectory(examples/ping_bot)
     add_subdirectory(examples/full_bot)
+    add_subdirectory(examples/moderation_bot)
+    add_subdirectory(examples/reaction_roles_bot)
+    add_subdirectory(examples/custom_prefix_bot)
 endif()
 
 # Client App

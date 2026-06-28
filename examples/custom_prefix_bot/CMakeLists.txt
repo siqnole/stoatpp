@@ -1,0 +1,2 @@
+add_executable(custom_prefix_bot main.cpp)
+target_link_libraries(custom_prefix_bot PRIVATE stoatpp)

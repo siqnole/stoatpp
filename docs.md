@@ -419,3 +419,14 @@ supported events:
 - `on_webhook_update` (`events::WebhookUpdate`)
 - `on_voice_state_update` (`events::VoiceStateUpdate`)
 - `on_raw_event` (type, json)
+
+## Examples
+
+For complete, runnable example bots demonstrating the library's capabilities, check the `examples/` directory:
+
+1. **[Ping Bot](file:///home/siq/stoat++/examples/ping_bot/main.cpp)**: A simple gateway-based bot that responds with "pong!" to `!ping` messages.
+2. **[Full Bot](file:///home/siq/stoat++/examples/full_bot/main.cpp)**: Demonstrates registering commands using `register_command`, handling logging callbacks, tracking member join events, and basic typing indicator status updates.
+3. **[Moderation Bot](file:///home/siq/stoat++/examples/moderation_bot/main.cpp)**: Shows how to perform moderation actions (banning, kicking, and adding roles) with commands, parse user mentions, and resolve server role caches.
+4. **[Reaction Roles Bot](file:///home/siq/stoat++/examples/reaction_roles_bot/main.cpp)**: Listens to gateway `on_message_react` and `on_message_unreact` events to dynamically assign and remove roles based on member reactions.
+5. **[Custom Prefix Bot](file:///home/siq/stoat++/examples/custom_prefix_bot/main.cpp)**: Demonstrates utilizing the custom `prefix_resolver` configuration callback to dynamically resolve custom command prefixes on a per-server basis.
+
