@@ -315,7 +315,25 @@ void gateway::handle_event(const nlohmann::json& j) {
         if (j.contains("content")) ev.content = j["content"].get<std::string>();
         if (j.contains("nonce")) ev.nonce = j["nonce"].get<std::string>();
         if (j.contains("edited") && j["edited"].is_boolean()) ev.edited = j["edited"].get<bool>();
-        
+
+        if (j.contains("replies") && j["replies"].is_array()) {
+            for (const auto& r : j["replies"]) {
+                if (r.is_string()) ev.replies.push_back(r.get<std::string>());
+            }
+        }
+        if (j.contains("mentions") && j["mentions"].is_array()) {
+            for (const auto& m : j["mentions"]) {
+                if (m.is_string()) ev.mentions.push_back(m.get<std::string>());
+            }
+        }
+        if (j.contains("attachments") && j["attachments"].is_array()) {
+            for (const auto& a : j["attachments"]) {
+                if (a.is_string()) ev.attachments.push_back(a.get<std::string>());
+                else if (a.is_object() && a.contains("id") && a["id"].is_string())
+                    ev.attachments.push_back(a["id"].get<std::string>());
+            }
+        }
+
         ev.raw = j;
         dispatcher_.dispatch_message(ev);
         return;

@@ -491,7 +491,7 @@ void cluster::send_message(const std::string& channel_id,
                     }).detach();
                 }
             } else {
-                utils::logger::log(LogLevel::ERROR, "Failed to send message: " + res.error_message(), config_);
+                utils::logger::log(LogLevel::ERROR, "Failed to send message: " + res.error_message() + " | body: " + res.body.dump(), config_);
                 if (callback) callback(models::Message{}, false);
             }
         } catch (const std::exception& e) {
@@ -557,6 +557,34 @@ void cluster::delete_message(const std::string& channel_id,
             if (callback) callback(res.success());
         } catch (const std::exception& e) {
             utils::logger::log(LogLevel::ERROR, "Exception in delete_message: " + std::string(e.what()), config_);
+            if (callback) callback(false);
+        }
+    }).detach();
+}
+
+void cluster::pin_message(const std::string& channel_id,
+                          const std::string& message_id,
+                          std::function<void(bool)> callback) {
+    std::thread([this, channel_id, message_id, callback]() {
+        try {
+            auto res = rest_.pin_message(channel_id, message_id);
+            if (callback) callback(res.success());
+        } catch (const std::exception& e) {
+            utils::logger::log(LogLevel::ERROR, "Exception in pin_message: " + std::string(e.what()), config_);
+            if (callback) callback(false);
+        }
+    }).detach();
+}
+
+void cluster::unpin_message(const std::string& channel_id,
+                            const std::string& message_id,
+                            std::function<void(bool)> callback) {
+    std::thread([this, channel_id, message_id, callback]() {
+        try {
+            auto res = rest_.unpin_message(channel_id, message_id);
+            if (callback) callback(res.success());
+        } catch (const std::exception& e) {
+            utils::logger::log(LogLevel::ERROR, "Exception in unpin_message: " + std::string(e.what()), config_);
             if (callback) callback(false);
         }
     }).detach();

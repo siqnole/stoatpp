@@ -67,7 +67,13 @@ bot.send_message("channel_id", "hello");
 // send rich message with embeds
 stoatpp::models::MessagePayload payload;
 payload.content = "embed test";
-payload.embeds.push_back({{"title", "hello"}});
+
+stoatpp::models::Embed embed;
+embed.title       = "hello";
+embed.colour      = "#5865f2";
+embed.set_image("https://example.com/banner.png");
+payload.embeds.push_back(embed.to_json());
+
 bot.send_message("channel_id", payload);
 
 // edit content
@@ -85,6 +91,47 @@ bot.react_to_message("channel_id", "message_id", "⬅");
 // remove reaction (user_id optional)
 bot.unreact_from_message("channel_id", "message_id", "⬅", "user_id");
 ```
+
+## embeds
+
+`stoatpp::models::Embed` is a typed builder for Revolt's sendable embed.
+call `.to_json()` and push the result into `MessagePayload::embeds`.
+
+> **Note:** bot-sent embeds use the `SendableEmbed` API type, which does not
+> support a dedicated image field. To display an image, embed it as markdown
+> in the `description` field: `![](url)`.
+
+```cpp
+stoatpp::models::Embed embed;
+embed.title       = "stoat++ embed";
+embed.description = "supports **markdown** and `code`";
+embed.url         = "https://github.com/stoat-chat";  // link on the title
+embed.icon_url    = "https://example.com/icon.png";   // small icon
+embed.colour      = "#5865f2";                         // CSS colour
+
+// embed an image via markdown in the description
+embed.set_image("https://example.com/banner.png");     // appends \n![](url)
+
+// or manually:
+embed.description = "some text\n![](https://example.com/image.png)";
+
+stoatpp::models::MessagePayload payload;
+payload.content = "check this out:";
+payload.embeds.push_back(embed.to_json());
+bot.send_message("channel_id", payload);
+```
+
+**`Embed` fields**
+
+| field | type | description |
+|---|---|---|
+| `title` | `optional<string>` | embed heading |
+| `description` | `optional<string>` | body text (markdown supported, use `![](url)` for images) |
+| `url` | `optional<string>` | URL the title links to |
+| `icon_url` | `optional<string>` | small icon shown next to the title |
+| `colour` | `optional<string>` | CSS colour string (e.g. `"#ff6b6b"`) |
+
+**`set_image(url)`** — convenience method that appends `\n![](url)` to `description`.
 
 ## cache
 

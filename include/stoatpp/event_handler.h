@@ -25,13 +25,16 @@ struct Ready {
 struct Message {
     std::string id;
     std::string channel_id;
-    std::string server_id;   // optional, empty for DMs
+    std::string server_id;              // empty for DMs
     models::User author;
     std::string content;
     std::string nonce;
     bool edited = false;
-    std::string prefix;
-    nlohmann::json raw;      // full raw JSON always available
+    std::string prefix;                 // library-set: matched command prefix
+    std::vector<std::string> replies;   // IDs of messages this message replies to
+    std::vector<std::string> mentions;  // IDs of users mentioned
+    std::vector<std::string> attachments; // attachment IDs
+    nlohmann::json raw;                 // full raw JSON always available
 };
 
 struct MessageUpdate {

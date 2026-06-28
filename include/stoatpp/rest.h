@@ -39,6 +39,13 @@ public:
                          const std::vector<uint8_t>& data,
                          const std::string& mime_type);
 
+    // Download an image from a public URL and upload it to Autumn.
+    // Returns the Autumn file ID on success (empty string on failure).
+    // Use the returned ID as Embed::media for embed images.
+    std::string upload_from_url(const std::string& image_url,
+                                const std::string& filename = "image.png",
+                                const std::string& mime_type = "image/png");
+
     int remaining_calls(const std::string& bucket) const;
     int reset_after_ms(const std::string& bucket) const;
 

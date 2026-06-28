@@ -101,6 +101,14 @@ public:
                         const std::string& message_id,
                         std::function<void(bool)> callback = nullptr);
 
+    void pin_message(const std::string& channel_id,
+                     const std::string& message_id,
+                     std::function<void(bool)> callback = nullptr);
+
+    void unpin_message(const std::string& channel_id,
+                       const std::string& message_id,
+                       std::function<void(bool)> callback = nullptr);
+
     void react_to_message(const std::string& channel_id,
                           const std::string& message_id,
                           const std::string& emoji_id,

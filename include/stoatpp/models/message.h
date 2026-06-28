@@ -6,6 +6,41 @@
 
 namespace stoatpp::models {
 
+// ---------------------------------------------------------------------------
+// Embed builder
+// Revolt sendable embed. Construct one, fill fields, then call .to_json()
+// and push the result into MessagePayload::embeds.
+// To show an image: call set_image(file_id) where file_id is an Autumn ID
+// obtained via bot.rest().upload_from_url(url).
+// ---------------------------------------------------------------------------
+struct Embed {
+    std::optional<std::string>   title;
+    std::optional<std::string>   description;
+    std::optional<std::string>   url;          // link on the title
+    std::optional<std::string>   icon_url;     // small icon next to title
+    std::optional<std::string>   colour;       // CSS colour string, e.g. "#5865f2"
+    std::optional<std::string>   media;        // Autumn file ID for embed image
+
+    // Set the embed image from an Autumn file ID.
+    // Get the ID via: std::string id = bot.rest().upload_from_url(image_url);
+    Embed& set_image(const std::string& autumn_file_id) {
+        media = autumn_file_id;
+        return *this;
+    }
+
+    nlohmann::json to_json() const {
+        nlohmann::json j;
+        if (title)       j["title"]       = *title;
+        if (description) j["description"] = *description;
+        if (url)         j["url"]         = *url;
+        if (icon_url)    j["icon_url"]    = *icon_url;
+        if (colour)      j["colour"]      = *colour;
+        if (media)       j["media"]       = *media;
+        return j;
+    }
+};
+
+
 struct MessagePayload {
     std::string content;
     std::optional<std::string> nonce;

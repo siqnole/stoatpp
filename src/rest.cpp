@@ -181,10 +181,10 @@ rest_client::Response rest_client::del(const std::string& path, const nlohmann::
 }
 
 rest_client::Response rest_client::upload_file(const std::string& path,
-                                              const std::string& filename,
-                                              const std::vector<uint8_t>& data,
-                                              const std::string& mime_type) {
-    httplib::Client cli(config_.api_base_url);
+                                               const std::string& filename,
+                                               const std::vector<uint8_t>& data,
+                                               const std::string& mime_type) {
+    httplib::Client cli(config_.autumn_url);
     cli.set_connection_timeout(std::chrono::milliseconds(config_.http_timeout_ms));
     cli.set_read_timeout(std::chrono::milliseconds(config_.http_timeout_ms));
 
@@ -203,10 +203,10 @@ rest_client::Response rest_client::upload_file(const std::string& path,
         { "file", file_content, filename, mime_type }
     };
 
-    utils::logger::log(LogLevel::DEBUG, "REST: sending file upload to " + path, config_);
+    utils::logger::log(LogLevel::DEBUG, "REST: uploading file to Autumn " + path, config_);
     auto res = cli.Post(path, headers, items);
     if (!res) {
-        throw NetworkError("File upload failed");
+        throw NetworkError("File upload to Autumn failed");
     }
 
     nlohmann::json resp_body;
@@ -219,6 +219,46 @@ rest_client::Response rest_client::upload_file(const std::string& path,
     }
 
     return Response{res->status, resp_body};
+}
+
+std::string rest_client::upload_from_url(const std::string& image_url,
+                                         const std::string& filename,
+                                         const std::string& mime_type) {
+    // Strip scheme to get host + path for httplib
+    std::string url = image_url;
+    std::string scheme;
+    if (url.rfind("https://", 0) == 0) { scheme = "https://"; url = url.substr(8); }
+    else if (url.rfind("http://", 0) == 0) { scheme = "http://"; url = url.substr(7); }
+
+    auto slash = url.find('/');
+    std::string host = (slash == std::string::npos) ? url : url.substr(0, slash);
+    std::string path = (slash == std::string::npos) ? "/" : url.substr(slash);
+
+    utils::logger::log(LogLevel::DEBUG, "upload_from_url: fetching " + scheme + host + path, config_);
+
+    httplib::Client fetch_cli(scheme + host);
+    fetch_cli.set_connection_timeout(std::chrono::milliseconds(config_.http_timeout_ms));
+    fetch_cli.set_read_timeout(std::chrono::milliseconds(config_.http_timeout_ms));
+    fetch_cli.set_follow_location(true);
+
+    auto fetch_res = fetch_cli.Get(path);
+    if (!fetch_res || fetch_res->status < 200 || fetch_res->status >= 300) {
+        utils::logger::log(LogLevel::ERROR, "upload_from_url: failed to fetch image", config_);
+        return "";
+    }
+
+    std::vector<uint8_t> data(fetch_res->body.begin(), fetch_res->body.end());
+    auto up_res = upload_file("/attachments", filename, data, mime_type);
+    if (!up_res.success()) {
+        utils::logger::log(LogLevel::ERROR, "upload_from_url: Autumn upload failed: " + up_res.error_message(), config_);
+        return "";
+    }
+
+    if (up_res.body.contains("id") && up_res.body["id"].is_string()) {
+        return up_res.body["id"].get<std::string>();
+    }
+    utils::logger::log(LogLevel::ERROR, "upload_from_url: no id in Autumn response: " + up_res.body.dump(), config_);
+    return "";
 }
 
 int rest_client::remaining_calls(const std::string& bucket) const {
