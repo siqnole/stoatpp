@@ -334,6 +334,9 @@ void cluster::start(bool return_after_init) {
         utils::logger::log(LogLevel::WARNING, "Could not fetch node info; using default Autumn URL", config_);
     }
 
+    timers_running_ = true;
+    timer_thread_ = std::thread(&cluster::run_timer_loop, this);
+
     gateway_.connect();
 
     running_ = true;
@@ -347,6 +350,13 @@ void cluster::start(bool return_after_init) {
 void cluster::stop() {
     utils::logger::log(LogLevel::INFO, "Stopping cluster...", config_);
     running_ = false;
+    
+    timers_running_ = false;
+    timer_cv_.notify_all();
+    if (timer_thread_.joinable()) {
+        timer_thread_.join();
+    }
+
     gateway_.disconnect();
 }
 
@@ -1170,6 +1180,69 @@ uint64_t cluster::uptime() const {
 
 const std::string& cluster::token() const {
     return token_;
+}
+
+const std::vector<Command>& cluster::get_commands() const {
+    return registered_commands_;
+}
+
+uint64_t cluster::start_timer(timer_callback cb, uint64_t interval_seconds) {
+    uint64_t id = next_timer_id_.fetch_add(1);
+    {
+        std::lock_guard<std::mutex> lock(timers_mutex_);
+        timers_.push_back({id, cb, interval_seconds, std::chrono::steady_clock::now()});
+    }
+    timer_cv_.notify_all();
+    return id;
+}
+
+bool cluster::stop_timer(uint64_t id) {
+    std::lock_guard<std::mutex> lock(timers_mutex_);
+    auto it = std::find_if(timers_.begin(), timers_.end(), [id](const TimerInfo& t) {
+        return t.id == id;
+    });
+    if (it != timers_.end()) {
+        timers_.erase(it);
+        return true;
+    }
+    return false;
+}
+
+void cluster::run_timer_loop() {
+    while (timers_running_) {
+        std::vector<std::pair<timer_callback, timer>> to_run;
+        {
+            std::lock_guard<std::mutex> lock(timers_mutex_);
+            auto now = std::chrono::steady_clock::now();
+
+            for (auto& t : timers_) {
+                auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - t.last_run).count();
+                if (elapsed >= static_cast<int64_t>(t.interval_seconds)) {
+                    to_run.push_back({t.callback, {t.id, t.interval_seconds}});
+                    t.last_run = now;
+                }
+            }
+        }
+
+        // Run callbacks outside the lock
+        for (const auto& run : to_run) {
+            if (run.first) {
+                try {
+                    run.first(run.second);
+                } catch (const std::exception& e) {
+                    utils::logger::log(LogLevel::ERROR, "Exception in timer callback: " + std::string(e.what()), config_);
+                } catch (...) {
+                    utils::logger::log(LogLevel::ERROR, "Unknown exception in timer callback", config_);
+                }
+            }
+        }
+
+        // Sleep for 500ms or until notified/stopped
+        std::unique_lock<std::mutex> cv_lock(timers_mutex_);
+        timer_cv_.wait_for(cv_lock, std::chrono::milliseconds(500), [this]() {
+            return !timers_running_;
+        });
+    }
 }
 
 } // namespace stoatpp

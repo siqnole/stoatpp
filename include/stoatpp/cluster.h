@@ -7,6 +7,9 @@
 #include <chrono>
 #include <unordered_map>
 #include <shared_mutex>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
 
 #include "client_config.h"
 #include "rest.h"
@@ -22,6 +25,13 @@ namespace stoatpp {
 class bot_module;
 class cluster;
 
+struct timer {
+    uint64_t id;
+    uint64_t interval_seconds;
+};
+
+using timer_callback = std::function<void(timer)>;
+
 struct Command {
     std::string name;
     std::vector<std::string> aliases;
@@ -29,6 +39,7 @@ struct Command {
     std::string usage;
     std::vector<std::string> args;
     std::function<void(cluster&, const events::Message&, const std::vector<std::string>&)> callback;
+    std::string category;
 };
 
 class cluster {
@@ -205,6 +216,7 @@ public:
     int64_t ping_latency() const;
     std::chrono::steady_clock::time_point launch_time() const;
     uint64_t uptime() const;
+    const std::vector<Command>& get_commands() const;
 
     // Cog modules and Commands APIs
     void use(std::unique_ptr<bot_module> module);
@@ -221,6 +233,9 @@ public:
                        const std::string& user_id,
                        std::chrono::milliseconds timeout,
                        std::function<void(std::optional<events::Message>)> callback);
+
+    uint64_t start_timer(timer_callback cb, uint64_t interval_seconds);
+    bool stop_timer(uint64_t id);
 
 private:
     std::string      token_;
@@ -258,6 +273,21 @@ private:
     };
     std::vector<MessageWatcher> message_watchers_;
     mutable std::mutex message_watchers_mutex_;
+
+    // Background Timers variables
+    struct TimerInfo {
+        uint64_t id;
+        timer_callback callback;
+        uint64_t interval_seconds;
+        std::chrono::steady_clock::time_point last_run;
+    };
+    std::vector<TimerInfo> timers_;
+    mutable std::mutex timers_mutex_;
+    std::atomic<uint64_t> next_timer_id_{1};
+    std::thread timer_thread_;
+    std::atomic<bool> timers_running_{false};
+    std::condition_variable timer_cv_;
+    void run_timer_loop();
 };
 
 } // namespace stoatpp

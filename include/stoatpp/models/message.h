@@ -28,6 +28,18 @@ struct Embed {
         return *this;
     }
 
+    Embed& set_title(const std::string& t) { title = t; return *this; }
+    Embed& set_description(const std::string& d) { description = d; return *this; }
+    Embed& set_url(const std::string& u) { url = u; return *this; }
+    Embed& set_icon_url(const std::string& i) { icon_url = i; return *this; }
+    Embed& set_colour(const std::string& c) { colour = c; return *this; }
+    Embed& set_colour(uint32_t rgb) {
+        char hex[8];
+        snprintf(hex, sizeof(hex), "#%06x", rgb & 0xffffff);
+        colour = hex;
+        return *this;
+    }
+
     nlohmann::json to_json() const {
         nlohmann::json j;
         if (title)       j["title"]       = *title;
@@ -63,6 +75,21 @@ struct MessagePayload {
 
     // library-only: auto-delete this message after N seconds (0 = disabled)
     int delete_after = 0;
+
+    MessagePayload& set_content(const std::string& c) { content = c; return *this; }
+    MessagePayload& set_nonce(const std::string& n) { nonce = n; return *this; }
+    MessagePayload& add_reply(const std::string& message_id, bool mention = false) {
+        replies.push_back({message_id, mention});
+        return *this;
+    }
+    MessagePayload& add_embed(const Embed& embed) {
+        embeds.push_back(embed.to_json());
+        return *this;
+    }
+    MessagePayload& set_delete_after(int seconds) {
+        delete_after = seconds;
+        return *this;
+    }
 
     nlohmann::json to_json() const;
 };

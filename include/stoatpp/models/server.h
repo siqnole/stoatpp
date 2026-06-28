@@ -4,6 +4,7 @@
 #include <vector>
 #include <nlohmann/json.hpp>
 #include "role.h"
+#include "member.h"
 
 namespace stoatpp::models {
 
@@ -21,6 +22,29 @@ struct Server {
 
     static Server from_json(const nlohmann::json& j);
     nlohmann::json to_json() const;
+
+    int get_highest_rank(const Member& member) const {
+        if (owner == member.id) {
+            return -1;
+        }
+        int highest = 999999;
+        for (const auto& r_id : member.roles) {
+            for (const auto& r : roles) {
+                if (r.id == r_id) {
+                    if (r.rank < highest) {
+                        highest = r.rank;
+                    }
+                }
+            }
+        }
+        return highest;
+    }
+
+    bool check_hierarchy(const Member& a, const Member& b) const {
+        int rank_a = get_highest_rank(a);
+        int rank_b = get_highest_rank(b);
+        return rank_a < rank_b;
+    }
 };
 
 inline Server Server::from_json(const nlohmann::json& j) {
