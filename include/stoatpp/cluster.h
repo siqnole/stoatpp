@@ -208,6 +208,10 @@ public:
 
     void fetch_user(const std::string& user_id, std::function<void(models::User, bool success)> callback);
     void fetch_member(const std::string& server_id, const std::string& user_id, std::function<void(models::Member, bool success)> callback);
+    void await_message(const std::string& channel_id,
+                       const std::string& user_id,
+                       std::chrono::milliseconds timeout,
+                       std::function<void(std::optional<events::Message>)> callback);
 
 private:
     std::string      token_;
@@ -236,6 +240,15 @@ private:
     };
     std::unordered_map<std::string, HelpSession> help_sessions_;
     mutable std::mutex help_sessions_mutex_;
+
+    struct MessageWatcher {
+        std::string watcher_id;
+        std::string channel_id;
+        std::string user_id;
+        std::function<void(std::optional<events::Message>)> callback;
+    };
+    std::vector<MessageWatcher> message_watchers_;
+    mutable std::mutex message_watchers_mutex_;
 };
 
 } // namespace stoatpp

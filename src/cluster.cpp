@@ -205,6 +205,26 @@ cluster::cluster(const std::string& token, ClientConfig config)
 
     // 1. Automatic prefix-based command routing
     this->on_message([this](const events::Message& msg) {
+        std::function<void(std::optional<events::Message>)> cb = nullptr;
+        {
+            std::lock_guard<std::mutex> lock(message_watchers_mutex_);
+            auto it = std::find_if(message_watchers_.begin(), message_watchers_.end(),
+                                   [&msg](const MessageWatcher& w) {
+                                       if (w.channel_id != msg.channel_id) return false;
+                                       if (!w.user_id.empty() && w.user_id != msg.author.id) return false;
+                                       return true;
+                                   });
+            if (it != message_watchers_.end()) {
+                cb = it->callback;
+                message_watchers_.erase(it);
+            }
+        }
+
+        if (cb) {
+            cb(msg);
+            return;
+        }
+
         if (!msg.author.username.empty()) {
             std::lock_guard<std::shared_mutex> lock(cache_mutex_);
             user_cache_[msg.author.id] = msg.author;
@@ -1057,6 +1077,39 @@ void cluster::fetch_member(const std::string& server_id, const std::string& user
             }
         } catch (...) {
             if (callback) callback(models::Member{}, false);
+        }
+    }).detach();
+}
+void cluster::await_message(const std::string& channel_id,
+                           const std::string& user_id,
+                           std::chrono::milliseconds timeout,
+                           std::function<void(std::optional<events::Message>)> callback) {
+    static std::atomic<uint64_t> watcher_counter{0};
+    std::string watcher_id = "watcher_" + std::to_string(watcher_counter.fetch_add(1));
+
+    {
+        std::lock_guard<std::mutex> lock(message_watchers_mutex_);
+        message_watchers_.push_back({watcher_id, channel_id, user_id, callback});
+    }
+
+    std::thread([this, watcher_id, timeout, callback]() {
+        std::this_thread::sleep_for(timeout);
+        
+        bool triggered = false;
+        {
+            std::lock_guard<std::mutex> lock(message_watchers_mutex_);
+            auto it = std::find_if(message_watchers_.begin(), message_watchers_.end(),
+                                   [&watcher_id](const MessageWatcher& w) {
+                                       return w.watcher_id == watcher_id;
+                                   });
+            if (it != message_watchers_.end()) {
+                message_watchers_.erase(it);
+                triggered = true;
+            }
+        }
+
+        if (triggered && callback) {
+            callback(std::nullopt);
         }
     }).detach();
 }
