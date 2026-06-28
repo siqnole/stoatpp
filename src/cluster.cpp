@@ -1123,4 +1123,8 @@ uint64_t cluster::uptime() const {
     return std::chrono::duration_cast<std::chrono::seconds>(now - launch_time_).count();
 }
 
+const std::string& cluster::token() const {
+    return token_;
+}
+
 } // namespace stoatpp

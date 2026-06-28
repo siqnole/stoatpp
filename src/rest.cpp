@@ -465,9 +465,13 @@ rest_client::Response rest_client::delete_relationship(const std::string& user_i
 rest_client::Response rest_client::create_custom_emoji(const std::string& name, const std::string& file_id, const std::optional<std::string>& server_id) {
     nlohmann::json body;
     body["name"] = name;
-    body["file_id"] = file_id;
-    if (server_id) body["server_id"] = *server_id;
-    return post("/custom/emoji", body);
+    if (server_id) {
+        body["parent"] = {
+            {"type", "Server"},
+            {"id", *server_id}
+        };
+    }
+    return put("/custom/emoji/" + file_id, body);
 }
 
 rest_client::Response rest_client::get_custom_emoji(const std::string& emoji_id) {

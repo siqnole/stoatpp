@@ -193,6 +193,7 @@ public:
 
     models::User current_user() const;
     const ClientConfig& config() const;
+    const std::string& token() const;
     int64_t ping_latency() const;
     std::chrono::steady_clock::time_point launch_time() const;
     uint64_t uptime() const;
