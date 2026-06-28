@@ -48,6 +48,7 @@ public:
 
     int remaining_calls(const std::string& bucket) const;
     int reset_after_ms(const std::string& bucket) const;
+    void update_config(const ClientConfig& config) { config_ = config; }
 
     void set_pre_request_hook(std::function<void(const std::string& method,
                                                  const std::string& path,

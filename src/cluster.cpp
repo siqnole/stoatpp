@@ -316,7 +316,24 @@ cluster::cluster(const std::string& token, ClientConfig config)
 
 void cluster::start(bool return_after_init) {
     utils::logger::log(LogLevel::INFO, "Starting cluster...", config_);
-    
+
+    // Auto-discover Autumn URL from node info before connecting
+    try {
+        auto node = rest_.get_node_info();
+        if (node.success() &&
+            node.body.contains("features") &&
+            node.body["features"].contains("autumn") &&
+            node.body["features"]["autumn"].contains("url") &&
+            node.body["features"]["autumn"]["url"].is_string()) {
+            std::string autumn = node.body["features"]["autumn"]["url"].get<std::string>();
+            config_.autumn_url = autumn;
+            rest_.update_config(config_);
+            utils::logger::log(LogLevel::INFO, "Autumn URL: " + autumn, config_);
+        }
+    } catch (...) {
+        utils::logger::log(LogLevel::WARNING, "Could not fetch node info; using default Autumn URL", config_);
+    }
+
     gateway_.connect();
 
     running_ = true;

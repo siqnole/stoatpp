@@ -187,6 +187,7 @@ rest_client::Response rest_client::upload_file(const std::string& path,
     httplib::Client cli(config_.autumn_url);
     cli.set_connection_timeout(std::chrono::milliseconds(config_.http_timeout_ms));
     cli.set_read_timeout(std::chrono::milliseconds(config_.http_timeout_ms));
+    cli.set_follow_location(true);
 
     httplib::Headers headers;
     if (config_.token_type == TokenType::BOT) {
