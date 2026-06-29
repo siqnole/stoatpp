@@ -88,6 +88,9 @@ struct ClientConfig {
     // --- Built-in Help Command ---
     bool enable_default_help = true;
     std::string default_help_color = "#5865f2";
+
+    // --- Bot ownership ---
+    std::string owner_id = "";
 };
 
 } // namespace stoatpp

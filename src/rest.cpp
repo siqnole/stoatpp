@@ -40,7 +40,8 @@ static rest_client::Response perform_request(
     const std::string& token,
     const ClientConfig& config,
     utils::ratelimiter& ratelimiter,
-    std::function<void(const std::string&, const std::string&, nlohmann::json&)> pre_hook
+    std::function<void(const std::string&, const std::string&, nlohmann::json&)> pre_hook,
+    std::function<void(const std::string&, const std::string&, int, const std::string&)> error_cb = nullptr
 ) {
     if (pre_hook) {
         pre_hook(method, path, body);
@@ -107,6 +108,9 @@ static rest_client::Response perform_request(
                 std::this_thread::sleep_for(std::chrono::seconds(1));
                 continue;
             }
+            if (error_cb) {
+                error_cb(method, path, 0, err_msg);
+            }
             throw NetworkError(err_msg);
         }
 
@@ -152,7 +156,22 @@ static rest_client::Response perform_request(
                 std::this_thread::sleep_for(std::chrono::milliseconds(retry_after));
                 continue;
             } else {
+                if (error_cb) {
+                    error_cb(method, path, status, "Rate limit hit");
+                }
                 throw RateLimitError("Rate limit hit on " + path, retry_after);
+            }
+        }
+
+        if (status < 200 || status >= 300) {
+            std::string err_msg;
+            if (resp_body.is_object() && resp_body.contains("error") && resp_body["error"].is_string()) {
+                err_msg = resp_body["error"].get<std::string>();
+            } else {
+                err_msg = "HTTP error " + std::to_string(status);
+            }
+            if (error_cb) {
+                error_cb(method, path, status, err_msg);
             }
         }
 
@@ -161,23 +180,23 @@ static rest_client::Response perform_request(
 }
 
 rest_client::Response rest_client::get(const std::string& path) {
-    return perform_request("GET", path, nullptr, token_, config_, ratelimiter_, pre_request_hook_);
+    return perform_request("GET", path, nullptr, token_, config_, ratelimiter_, pre_request_hook_, error_callback_);
 }
 
 rest_client::Response rest_client::post(const std::string& path, const nlohmann::json& body) {
-    return perform_request("POST", path, body, token_, config_, ratelimiter_, pre_request_hook_);
+    return perform_request("POST", path, body, token_, config_, ratelimiter_, pre_request_hook_, error_callback_);
 }
 
 rest_client::Response rest_client::patch(const std::string& path, const nlohmann::json& body) {
-    return perform_request("PATCH", path, body, token_, config_, ratelimiter_, pre_request_hook_);
+    return perform_request("PATCH", path, body, token_, config_, ratelimiter_, pre_request_hook_, error_callback_);
 }
 
 rest_client::Response rest_client::put(const std::string& path, const nlohmann::json& body) {
-    return perform_request("PUT", path, body, token_, config_, ratelimiter_, pre_request_hook_);
+    return perform_request("PUT", path, body, token_, config_, ratelimiter_, pre_request_hook_, error_callback_);
 }
 
 rest_client::Response rest_client::del(const std::string& path, const nlohmann::json& body) {
-    return perform_request("DELETE", path, body, token_, config_, ratelimiter_, pre_request_hook_);
+    return perform_request("DELETE", path, body, token_, config_, ratelimiter_, pre_request_hook_, error_callback_);
 }
 
 rest_client::Response rest_client::upload_file(const std::string& path,

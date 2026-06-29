@@ -30,6 +30,12 @@ cluster::cluster(const std::string& token, ClientConfig config)
       gateway_(token, config, dispatcher_),
       launch_time_(std::chrono::steady_clock::now()) {
 
+    rest_.set_error_callback([this](const std::string& method, const std::string& path, int status_code, const std::string& error_msg) {
+        if (rest_error_handler_) {
+            rest_error_handler_(method, path, status_code, error_msg);
+        }
+    });
+
     if (config_.enable_default_help) {
         register_command("help", [this](cluster& bot, const events::Message& msg, const std::vector<std::string>& args) {
             std::vector<Command> cmds = registered_commands_;
@@ -266,11 +272,52 @@ cluster::cluster(const std::string& token, ClientConfig config)
             args.push_back(arg);
         }
 
-        auto it = commands_.find(cmd);
-        if (it != commands_.end()) {
+        Command cmd_obj;
+        bool found_cmd = false;
+        for (const auto& c : registered_commands_) {
+            if (c.name == cmd) {
+                cmd_obj = c;
+                found_cmd = true;
+                break;
+            }
+            for (const auto& a : c.aliases) {
+                if (a == cmd) {
+                    cmd_obj = c;
+                    found_cmd = true;
+                    break;
+                }
+            }
+        }
+
+        if (found_cmd) {
             events::Message dispatched_msg = msg;
             dispatched_msg.prefix = matched_prefix;
-            it->second(*this, dispatched_msg, args);
+            
+            if (cmd_obj.required_permissions > 0) {
+                if (dispatched_msg.server_id.empty()) {
+                    send_message(dispatched_msg.channel_id, "this command can only be used in a server.");
+                    return;
+                }
+                
+                fetch_member(dispatched_msg.server_id, dispatched_msg.author.id, [this, dispatched_msg, args, cmd_obj](models::Member mem, bool success) {
+                    if (!success) {
+                        send_message(dispatched_msg.channel_id, "failed to verify your server member permissions.");
+                        return;
+                    }
+                    auto server = get_server(dispatched_msg.server_id);
+                    if (!server) {
+                        send_message(dispatched_msg.channel_id, "failed to verify server configuration.");
+                        return;
+                    }
+                    if (!has_permission(*server, mem, cmd_obj.required_permissions)) {
+                        send_message(dispatched_msg.channel_id, "permission error: you do not have the required permissions to use this command.");
+                        return;
+                    }
+                    cmd_obj.callback(*this, dispatched_msg, args);
+                });
+            } else {
+                cmd_obj.callback(*this, dispatched_msg, args);
+            }
         }
     });
 
@@ -1243,6 +1290,46 @@ void cluster::run_timer_loop() {
             return !timers_running_;
         });
     }
+}
+
+bool cluster::is_owner(const std::string& user_id) const {
+    if (!config_.owner_id.empty()) {
+        return config_.owner_id == user_id;
+    }
+    return false;
+}
+
+bool cluster::is_server_owner(const std::string& server_id, const std::string& user_id) const {
+    auto server = get_server(server_id);
+    if (server) {
+        return server->owner == user_id;
+    }
+    return false;
+}
+
+bool cluster::has_permission(const models::Server& server, const models::Member& member, int64_t permission_mask) const {
+    if (server.owner == member.id) {
+        return true;
+    }
+    int64_t allowed = 0;
+    for (const auto& role_id : member.roles) {
+        for (const auto& r : server.roles) {
+            if (r.id == role_id) {
+                if (r.permissions.is_number()) {
+                    allowed |= r.permissions.get<int64_t>();
+                } else if (r.permissions.is_object() && r.permissions.contains("server")) {
+                    if (r.permissions["server"].is_number()) {
+                        allowed |= r.permissions["server"].get<int64_t>();
+                    }
+                }
+            }
+        }
+    }
+    return (allowed & permission_mask) == permission_mask;
+}
+
+void cluster::on_rest_error(std::function<void(const std::string& method, const std::string& path, int status_code, const std::string& error_msg)> cb) {
+    rest_error_handler_ = cb;
 }
 
 } // namespace stoatpp

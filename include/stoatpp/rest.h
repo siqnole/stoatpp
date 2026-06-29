@@ -189,11 +189,16 @@ public:
     Response get_onboarding_status();
     Response complete_onboarding(const std::string& username);
 
+    void set_error_callback(std::function<void(const std::string& method, const std::string& path, int status_code, const std::string& error_msg)> cb) {
+        error_callback_ = cb;
+    }
+
 private:
     std::string token_;
     ClientConfig config_;
     utils::ratelimiter ratelimiter_;
     std::function<void(const std::string& method, const std::string& path, nlohmann::json& body)> pre_request_hook_ = nullptr;
+    std::function<void(const std::string& method, const std::string& path, int status_code, const std::string& error_msg)> error_callback_ = nullptr;
 };
 
 class IHttpClient {
