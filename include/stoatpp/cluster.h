@@ -44,6 +44,7 @@ struct Command {
     std::string category;
     int64_t required_permissions = 0;
     int64_t cooldown_seconds = 0;
+    std::vector<std::string> subcommands;
 };
 
 class cluster {
