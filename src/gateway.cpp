@@ -78,7 +78,11 @@ void gateway::disconnect() {
         pimpl_->ping_thread_running = false;
         pimpl_->ping_cv.notify_all();
         if (pimpl_->ping_thread.joinable()) {
-            pimpl_->ping_thread.join();
+            if (std::this_thread::get_id() == pimpl_->ping_thread.get_id()) {
+                pimpl_->ping_thread.detach();
+            } else {
+                pimpl_->ping_thread.join();
+            }
         }
     }
 
@@ -165,7 +169,11 @@ void gateway::on_disconnected() {
         pimpl_->ping_thread_running = false;
         pimpl_->ping_cv.notify_all();
         if (pimpl_->ping_thread.joinable()) {
-            pimpl_->ping_thread.join();
+            if (std::this_thread::get_id() == pimpl_->ping_thread.get_id()) {
+                pimpl_->ping_thread.detach();
+            } else {
+                pimpl_->ping_thread.join();
+            }
         }
     }
     

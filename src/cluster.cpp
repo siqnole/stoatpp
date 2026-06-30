@@ -293,6 +293,37 @@ cluster::cluster(const std::string& token, ClientConfig config)
             events::Message dispatched_msg = msg;
             dispatched_msg.prefix = matched_prefix;
             
+            if (cmd_obj.cooldown_seconds > 0) {
+                std::unique_lock<std::mutex> lock(cooldowns_mutex_);
+                auto now = std::chrono::steady_clock::now();
+                auto& cmd_cooldowns = command_cooldowns_[cmd_obj.name];
+                auto it = cmd_cooldowns.find(msg.author.id);
+                if (it != cmd_cooldowns.end()) {
+                    auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - it->second).count();
+                    if (elapsed < cmd_obj.cooldown_seconds) {
+                        int64_t remaining = cmd_obj.cooldown_seconds - elapsed;
+                        lock.unlock();
+                        if (command_cooldown_handler_) {
+                            command_cooldown_handler_(*this, dispatched_msg, cmd_obj, remaining);
+                        } else {
+                            std::string time_str = "";
+                            if (remaining >= 3600) {
+                                int64_t hours = remaining / 3600;
+                                int64_t mins = (remaining % 3600) / 60;
+                                time_str = std::to_string(hours) + "h " + std::to_string(mins) + "m";
+                            } else if (remaining >= 60) {
+                                time_str = std::to_string(remaining / 60) + "m " + std::to_string(remaining % 60) + "s";
+                            } else {
+                                time_str = std::to_string(remaining) + "s";
+                            }
+                            send_message(dispatched_msg.channel_id, "you are on cooldown. please wait " + time_str + ".");
+                        }
+                        return;
+                    }
+                }
+                cmd_cooldowns[msg.author.id] = now;
+            }
+            
             if (cmd_obj.required_permissions > 0) {
                 if (dispatched_msg.server_id.empty()) {
                     send_message(dispatched_msg.channel_id, "this command can only be used in a server.");
@@ -401,7 +432,11 @@ void cluster::stop() {
     timers_running_ = false;
     timer_cv_.notify_all();
     if (timer_thread_.joinable()) {
-        timer_thread_.join();
+        if (std::this_thread::get_id() == timer_thread_.get_id()) {
+            timer_thread_.detach();
+        } else {
+            timer_thread_.join();
+        }
     }
 
     gateway_.disconnect();
@@ -1330,6 +1365,10 @@ bool cluster::has_permission(const models::Server& server, const models::Member&
 
 void cluster::on_rest_error(std::function<void(const std::string& method, const std::string& path, int status_code, const std::string& error_msg)> cb) {
     rest_error_handler_ = cb;
+}
+
+void cluster::on_command_cooldown(std::function<void(cluster&, const events::Message&, const Command&, int64_t remaining_seconds)> cb) {
+    command_cooldown_handler_ = cb;
 }
 
 } // namespace stoatpp

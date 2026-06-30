@@ -12,6 +12,7 @@
 #include <condition_variable>
 
 #include "client_config.h"
+#include "utils/timestamp.h"
 #include "rest.h"
 #include "gateway.h"
 #include "event_handler.h"
@@ -42,6 +43,7 @@ struct Command {
     std::function<void(cluster&, const events::Message&, const std::vector<std::string>&)> callback;
     std::string category;
     int64_t required_permissions = 0;
+    int64_t cooldown_seconds = 0;
 };
 
 class cluster {
@@ -224,6 +226,7 @@ public:
     bool is_server_owner(const std::string& server_id, const std::string& user_id) const;
     bool has_permission(const models::Server& server, const models::Member& member, int64_t permission_mask) const;
     void on_rest_error(std::function<void(const std::string& method, const std::string& path, int status_code, const std::string& error_msg)> cb);
+    void on_command_cooldown(std::function<void(cluster&, const events::Message&, const Command&, int64_t remaining_seconds)> cb);
 
     // Cog modules and Commands APIs
     void use(std::unique_ptr<bot_module> module);
@@ -294,8 +297,11 @@ private:
     std::thread timer_thread_;
     std::atomic<bool> timers_running_{false};
     std::condition_variable timer_cv_;
+    std::unordered_map<std::string, std::unordered_map<std::string, std::chrono::steady_clock::time_point>> command_cooldowns_;
+    mutable std::mutex cooldowns_mutex_;
     void run_timer_loop();
 
+    std::function<void(cluster&, const events::Message&, const Command&, int64_t remaining_seconds)> command_cooldown_handler_ = nullptr;
     std::function<void(const std::string& method, const std::string& path, int status_code, const std::string& error_msg)> rest_error_handler_ = nullptr;
 };
 
