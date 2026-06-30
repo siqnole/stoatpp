@@ -35,6 +35,8 @@ struct Message {
     std::vector<std::string> mentions;  // IDs of users mentioned
     std::vector<std::string> attachments; // attachment IDs
     nlohmann::json raw;                 // full raw JSON always available
+
+    static Message from_json(const nlohmann::json& j);
 };
 
 struct MessageUpdate {

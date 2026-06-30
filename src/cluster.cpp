@@ -231,124 +231,23 @@ cluster::cluster(const std::string& token, ClientConfig config)
             return;
         }
 
-        if (!msg.author.username.empty()) {
-            std::lock_guard<std::shared_mutex> lock(cache_mutex_);
-            user_cache_[msg.author.id] = msg.author;
-        }
-        if (msg.raw.contains("user") && msg.raw["user"].is_object()) {
-            auto usr = models::User::from_json(msg.raw["user"]);
-            std::lock_guard<std::shared_mutex> lock(cache_mutex_);
-            user_cache_[usr.id] = usr;
-        }
+        dispatch_command(msg);
+    });
 
-        std::vector<std::string> prefixes;
-        if (config_.prefix_resolver) {
-            prefixes = config_.prefix_resolver(*this, msg);
-        } else {
-            prefixes = {config_.command_prefix};
-        }
-
-        std::sort(prefixes.begin(), prefixes.end(), [](const std::string& a, const std::string& b) {
-            return a.size() > b.size();
-        });
-
-        std::string matched_prefix = "";
-        for (const auto& p : prefixes) {
-            if (!p.empty() && msg.content.rfind(p, 0) == 0) {
-                matched_prefix = p;
-                break;
-            }
-        }
-
-        if (matched_prefix.empty()) return;
-
-        std::stringstream ss(msg.content.substr(matched_prefix.size()));
-        std::string cmd;
-        ss >> cmd;
-
-        std::vector<std::string> args;
-        std::string arg;
-        while (ss >> arg) {
-            args.push_back(arg);
-        }
-
-        Command cmd_obj;
-        bool found_cmd = false;
-        for (const auto& c : registered_commands_) {
-            if (c.name == cmd) {
-                cmd_obj = c;
-                found_cmd = true;
-                break;
-            }
-            for (const auto& a : c.aliases) {
-                if (a == cmd) {
-                    cmd_obj = c;
-                    found_cmd = true;
-                    break;
+    this->on_message_update([this](const events::MessageUpdate& e) {
+        if (!config_.dispatch_commands_on_edit) return;
+        if (e.data.contains("content") && e.data["content"].is_string()) {
+            std::thread([this, e]() {
+                try {
+                    auto res = rest_.get_message(e.channel_id, e.id);
+                    if (res.success()) {
+                        auto msg = events::Message::from_json(res.body);
+                        dispatch_command(msg);
+                    }
+                } catch (const std::exception& err) {
+                    utils::logger::log(LogLevel::ERROR, "Exception in message update fetch: " + std::string(err.what()), config_);
                 }
-            }
-        }
-
-        if (found_cmd) {
-            events::Message dispatched_msg = msg;
-            dispatched_msg.prefix = matched_prefix;
-            
-            if (cmd_obj.cooldown_seconds > 0) {
-                std::unique_lock<std::mutex> lock(cooldowns_mutex_);
-                auto now = std::chrono::steady_clock::now();
-                auto& cmd_cooldowns = command_cooldowns_[cmd_obj.name];
-                auto it = cmd_cooldowns.find(msg.author.id);
-                if (it != cmd_cooldowns.end()) {
-                    auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - it->second).count();
-                    if (elapsed < cmd_obj.cooldown_seconds) {
-                        int64_t remaining = cmd_obj.cooldown_seconds - elapsed;
-                        lock.unlock();
-                        if (command_cooldown_handler_) {
-                            command_cooldown_handler_(*this, dispatched_msg, cmd_obj, remaining);
-                        } else {
-                            std::string time_str = "";
-                            if (remaining >= 3600) {
-                                int64_t hours = remaining / 3600;
-                                int64_t mins = (remaining % 3600) / 60;
-                                time_str = std::to_string(hours) + "h " + std::to_string(mins) + "m";
-                            } else if (remaining >= 60) {
-                                time_str = std::to_string(remaining / 60) + "m " + std::to_string(remaining % 60) + "s";
-                            } else {
-                                time_str = std::to_string(remaining) + "s";
-                            }
-                            send_message(dispatched_msg.channel_id, "you are on cooldown. please wait " + time_str + ".");
-                        }
-                        return;
-                    }
-                }
-                cmd_cooldowns[msg.author.id] = now;
-            }
-            
-            if (cmd_obj.required_permissions > 0) {
-                if (dispatched_msg.server_id.empty()) {
-                    send_message(dispatched_msg.channel_id, "this command can only be used in a server.");
-                    return;
-                }
-                
-                fetch_member(dispatched_msg.server_id, dispatched_msg.author.id, [this, dispatched_msg, args, cmd_obj](models::Member mem, bool success) {
-                    if (!success) {
-                        send_message(dispatched_msg.channel_id, "failed to verify your server member permissions.");
-                        return;
-                    }
-                    auto server = get_server(dispatched_msg.server_id);
-                    if (!server) {
-                        send_message(dispatched_msg.channel_id, "failed to verify server configuration.");
-                        return;
-                    }
-                    if (!has_permission(*server, mem, cmd_obj.required_permissions)) {
-                        send_message(dispatched_msg.channel_id, "permission error: you do not have the required permissions to use this command.");
-                        return;
-                    }
-                    cmd_obj.callback(*this, dispatched_msg, args);
-                });
-            } else {
-                cmd_obj.callback(*this, dispatched_msg, args);
-            }
+            }).detach();
         }
     });
 
@@ -389,6 +288,90 @@ cluster::cluster(const std::string& token, ClientConfig config)
         std::lock_guard<std::shared_mutex> lock(cache_mutex_);
         utils::logger::log(LogLevel::DEBUG, "Removing server from cache: " + e.id, config_);
         server_cache_.erase(e.id);
+    });
+
+    this->on_server_update([this](const events::ServerUpdate& e) {
+        std::lock_guard<std::shared_mutex> lock(cache_mutex_);
+        auto it = server_cache_.find(e.id);
+        if (it != server_cache_.end()) {
+            utils::logger::log(LogLevel::DEBUG, "Updating server in cache: " + it->second.name + " (" + e.id + ")", config_);
+            if (e.data.contains("name") && e.data["name"].is_string()) {
+                it->second.name = e.data["name"].get<std::string>();
+            }
+            if (e.data.contains("owner") && e.data["owner"].is_string()) {
+                it->second.owner = e.data["owner"].get<std::string>();
+            }
+            for (auto& [key, val] : e.data.items()) {
+                it->second.raw[key] = val;
+            }
+            for (const auto& field : e.clear) {
+                it->second.raw.erase(field);
+            }
+        }
+    });
+
+    this->on_server_role_create([this](const events::ServerRoleCreate& e) {
+        std::lock_guard<std::shared_mutex> lock(cache_mutex_);
+        auto it = server_cache_.find(e.server_id);
+        if (it != server_cache_.end()) {
+            utils::logger::log(LogLevel::DEBUG, "Caching new role: " + e.role.name + " (" + e.role_id + ") in server " + e.server_id, config_);
+            bool found = false;
+            for (auto& r : it->second.roles) {
+                if (r.id == e.role_id) {
+                    r = e.role;
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                it->second.roles.push_back(e.role);
+            }
+        }
+    });
+
+    this->on_server_role_update([this](const events::ServerRoleUpdate& e) {
+        std::lock_guard<std::shared_mutex> lock(cache_mutex_);
+        auto it = server_cache_.find(e.server_id);
+        if (it != server_cache_.end()) {
+            for (auto& r : it->second.roles) {
+                if (r.id == e.role_id) {
+                    utils::logger::log(LogLevel::DEBUG, "Updating role cache: " + r.name + " (" + e.role_id + ") in server " + e.server_id, config_);
+                    if (e.data.contains("name") && e.data["name"].is_string()) {
+                        r.name = e.data["name"].get<std::string>();
+                    }
+                    if (e.data.contains("colour") && !e.data["colour"].is_null()) {
+                        if (e.data["colour"].is_string()) {
+                            r.colour = e.data["colour"].get<std::string>();
+                        }
+                    }
+                    if (e.data.contains("rank") && e.data["rank"].is_number()) {
+                        r.rank = e.data["rank"].get<int>();
+                    }
+                    if (e.data.contains("permissions")) {
+                        r.permissions = e.data["permissions"];
+                    }
+                    for (auto& [key, val] : e.data.items()) {
+                        r.raw[key] = val;
+                    }
+                    for (const auto& field : e.clear) {
+                        r.raw.erase(field);
+                    }
+                    break;
+                }
+            }
+        }
+    });
+
+    this->on_server_role_delete([this](const events::ServerRoleDelete& e) {
+        std::lock_guard<std::shared_mutex> lock(cache_mutex_);
+        auto it = server_cache_.find(e.server_id);
+        if (it != server_cache_.end()) {
+            utils::logger::log(LogLevel::DEBUG, "Deleting role from cache: " + e.role_id + " in server " + e.server_id, config_);
+            auto& roles = it->second.roles;
+            roles.erase(std::remove_if(roles.begin(), roles.end(), [&e](const auto& r) {
+                return r.id == e.role_id;
+            }), roles.end());
+        }
     });
 }
 
@@ -850,14 +833,16 @@ void cluster::delete_role(const std::string& server_id,
 void cluster::add_role_to_member(const std::string& server_id,
                                  const std::string& user_id,
                                  const std::string& role_id,
-                                 std::function<void(bool)> callback) {
+                                 std::function<void(bool, std::string)> callback) {
     std::thread([this, server_id, user_id, role_id, callback]() {
         try {
             auto get_res = rest_.get("/servers/" + server_id + "/members/" + user_id);
             if (!get_res.success()) {
-                if (callback) callback(false);
+                utils::logger::log(LogLevel::ERROR, "add_role_to_member: GET member failed: " + get_res.body.dump(), config_);
+                if (callback) callback(false, "GET_MEMBER_FAILED");
                 return;
             }
+            utils::logger::log(LogLevel::INFO, "add_role_to_member: GET member response: " + get_res.body.dump(), config_);
             auto mem = models::Member::from_json(get_res.body);
             bool has_role = false;
             for (const auto& r : mem.roles) {
@@ -867,32 +852,56 @@ void cluster::add_role_to_member(const std::string& server_id,
                 }
             }
             if (has_role) {
-                if (callback) callback(true);
+                utils::logger::log(LogLevel::INFO, "add_role_to_member: user already has role " + role_id, config_);
+                if (callback) callback(true, "");
                 return;
             }
             mem.roles.push_back(role_id);
             nlohmann::json fields;
             fields["roles"] = mem.roles;
+            utils::logger::log(LogLevel::INFO, "add_role_to_member: PATCH payload: " + fields.dump(), config_);
             auto patch_res = rest_.edit_member(server_id, user_id, fields);
-            if (callback) callback(patch_res.success());
+            
+            std::string err_msg = "";
+            if (!patch_res.success()) {
+                if (patch_res.body.is_object() && patch_res.body.contains("type") && patch_res.body["type"].is_string()) {
+                    err_msg = patch_res.body["type"].get<std::string>();
+                } else if (patch_res.body.is_object() && patch_res.body.contains("error") && patch_res.body["error"].is_string()) {
+                    err_msg = patch_res.body["error"].get<std::string>();
+                } else {
+                    err_msg = "HTTP_" + std::to_string(patch_res.status_code);
+                }
+            }
+            if (callback) callback(patch_res.success(), err_msg);
         } catch (const std::exception& e) {
             utils::logger::log(LogLevel::ERROR, "Exception in add_role_to_member: " + std::string(e.what()), config_);
-            if (callback) callback(false);
+            if (callback) callback(false, e.what());
         }
     }).detach();
+}
+
+void cluster::add_role_to_member(const std::string& server_id,
+                                 const std::string& user_id,
+                                 const std::string& role_id,
+                                 std::function<void(bool)> callback) {
+    add_role_to_member(server_id, user_id, role_id, [callback](bool success, std::string) {
+        if (callback) callback(success);
+    });
 }
 
 void cluster::remove_role_from_member(const std::string& server_id,
                                       const std::string& user_id,
                                       const std::string& role_id,
-                                      std::function<void(bool)> callback) {
+                                      std::function<void(bool, std::string)> callback) {
     std::thread([this, server_id, user_id, role_id, callback]() {
         try {
             auto get_res = rest_.get("/servers/" + server_id + "/members/" + user_id);
             if (!get_res.success()) {
-                if (callback) callback(false);
+                utils::logger::log(LogLevel::ERROR, "remove_role_from_member: GET member failed: " + get_res.body.dump(), config_);
+                if (callback) callback(false, "GET_MEMBER_FAILED");
                 return;
             }
+            utils::logger::log(LogLevel::INFO, "remove_role_from_member: GET member response: " + get_res.body.dump(), config_);
             auto mem = models::Member::from_json(get_res.body);
             std::vector<std::string> new_roles;
             bool found = false;
@@ -904,18 +913,40 @@ void cluster::remove_role_from_member(const std::string& server_id,
                 }
             }
             if (!found) {
-                if (callback) callback(true);
+                utils::logger::log(LogLevel::INFO, "remove_role_from_member: user does not have role " + role_id, config_);
+                if (callback) callback(true, "");
                 return;
             }
             nlohmann::json fields;
             fields["roles"] = new_roles;
+            utils::logger::log(LogLevel::INFO, "remove_role_from_member: PATCH payload: " + fields.dump(), config_);
             auto patch_res = rest_.edit_member(server_id, user_id, fields);
-            if (callback) callback(patch_res.success());
+            
+            std::string err_msg = "";
+            if (!patch_res.success()) {
+                if (patch_res.body.is_object() && patch_res.body.contains("type") && patch_res.body["type"].is_string()) {
+                    err_msg = patch_res.body["type"].get<std::string>();
+                } else if (patch_res.body.is_object() && patch_res.body.contains("error") && patch_res.body["error"].is_string()) {
+                    err_msg = patch_res.body["error"].get<std::string>();
+                } else {
+                    err_msg = "HTTP_" + std::to_string(patch_res.status_code);
+                }
+            }
+            if (callback) callback(patch_res.success(), err_msg);
         } catch (const std::exception& e) {
             utils::logger::log(LogLevel::ERROR, "Exception in remove_role_from_member: " + std::string(e.what()), config_);
-            if (callback) callback(false);
+            if (callback) callback(false, e.what());
         }
     }).detach();
+}
+
+void cluster::remove_role_from_member(const std::string& server_id,
+                                      const std::string& user_id,
+                                      const std::string& role_id,
+                                      std::function<void(bool)> callback) {
+    remove_role_from_member(server_id, user_id, role_id, [callback](bool success, std::string) {
+        if (callback) callback(success);
+    });
 }
 
 void cluster::get_member_count(const std::string& server_id,
@@ -1369,6 +1400,143 @@ void cluster::on_rest_error(std::function<void(const std::string& method, const 
 
 void cluster::on_command_cooldown(std::function<void(cluster&, const events::Message&, const Command&, int64_t remaining_seconds)> cb) {
     command_cooldown_handler_ = cb;
+}
+
+void cluster::dispatch_command(const events::Message& msg) {
+    if (!msg.author.username.empty()) {
+        std::lock_guard<std::shared_mutex> lock(cache_mutex_);
+        user_cache_[msg.author.id] = msg.author;
+    }
+    if (msg.raw.contains("user") && msg.raw["user"].is_object()) {
+        auto usr = models::User::from_json(msg.raw["user"]);
+        std::lock_guard<std::shared_mutex> lock(cache_mutex_);
+        user_cache_[usr.id] = usr;
+    }
+
+    std::vector<std::string> prefixes;
+    if (config_.prefix_resolver) {
+        prefixes = config_.prefix_resolver(*this, msg);
+    } else {
+        prefixes = {config_.command_prefix};
+    }
+
+    std::sort(prefixes.begin(), prefixes.end(), [](const std::string& a, const std::string& b) {
+        return a.size() > b.size();
+    });
+
+    std::string matched_prefix = "";
+    for (const auto& p : prefixes) {
+        if (!p.empty() && msg.content.rfind(p, 0) == 0) {
+            matched_prefix = p;
+            break;
+        }
+    }
+
+    if (matched_prefix.empty()) return;
+
+    std::stringstream ss(msg.content.substr(matched_prefix.size()));
+    std::string cmd;
+    ss >> cmd;
+
+    std::vector<std::string> args;
+    std::string arg;
+    while (ss >> arg) {
+        args.push_back(arg);
+    }
+
+    Command cmd_obj;
+    bool found_cmd = false;
+    std::string match_cmd = cmd;
+    if (config_.case_insensitive_commands) {
+        std::transform(match_cmd.begin(), match_cmd.end(), match_cmd.begin(), ::tolower);
+    }
+
+    for (const auto& c : registered_commands_) {
+        std::string c_name = c.name;
+        if (config_.case_insensitive_commands) {
+            std::transform(c_name.begin(), c_name.end(), c_name.begin(), ::tolower);
+        }
+
+        if (c_name == match_cmd) {
+            cmd_obj = c;
+            found_cmd = true;
+            break;
+        }
+
+        for (const auto& a : c.aliases) {
+            std::string a_name = a;
+            if (config_.case_insensitive_commands) {
+                std::transform(a_name.begin(), a_name.end(), a_name.begin(), ::tolower);
+            }
+            if (a_name == match_cmd) {
+                cmd_obj = c;
+                found_cmd = true;
+                break;
+            }
+        }
+    }
+
+    if (found_cmd) {
+        events::Message dispatched_msg = msg;
+        dispatched_msg.prefix = matched_prefix;
+        
+        if (cmd_obj.cooldown_seconds > 0) {
+            std::unique_lock<std::mutex> lock(cooldowns_mutex_);
+            auto now = std::chrono::steady_clock::now();
+            auto& cmd_cooldowns = command_cooldowns_[cmd_obj.name];
+            auto it = cmd_cooldowns.find(msg.author.id);
+            if (it != cmd_cooldowns.end()) {
+                auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - it->second).count();
+                if (elapsed < cmd_obj.cooldown_seconds) {
+                    int64_t remaining = cmd_obj.cooldown_seconds - elapsed;
+                    lock.unlock();
+                    if (command_cooldown_handler_) {
+                        command_cooldown_handler_(*this, dispatched_msg, cmd_obj, remaining);
+                    } else {
+                        std::string time_str = "";
+                        if (remaining >= 3600) {
+                            int64_t hours = remaining / 3600;
+                            int64_t mins = (remaining % 3600) / 60;
+                            time_str = std::to_string(hours) + "h " + std::to_string(mins) + "m";
+                        } else if (remaining >= 60) {
+                            time_str = std::to_string(remaining / 60) + "m " + std::to_string(remaining % 60) + "s";
+                        } else {
+                            time_str = std::to_string(remaining) + "s";
+                        }
+                        send_message(dispatched_msg.channel_id, "you are on cooldown. please wait " + time_str + ".");
+                    }
+                    return;
+                }
+            }
+            cmd_cooldowns[msg.author.id] = now;
+        }
+        
+        if (cmd_obj.required_permissions > 0) {
+            if (dispatched_msg.server_id.empty()) {
+                send_message(dispatched_msg.channel_id, "this command can only be used in a server.");
+                return;
+            }
+            
+            fetch_member(dispatched_msg.server_id, dispatched_msg.author.id, [this, dispatched_msg, args, cmd_obj](models::Member mem, bool success) {
+                if (!success) {
+                    send_message(dispatched_msg.channel_id, "failed to verify your server member permissions.");
+                    return;
+                }
+                auto server = get_server(dispatched_msg.server_id);
+                if (!server) {
+                    send_message(dispatched_msg.channel_id, "failed to verify server configuration.");
+                    return;
+                }
+                if (!has_permission(*server, mem, cmd_obj.required_permissions)) {
+                    send_message(dispatched_msg.channel_id, "permission error: you do not have the required permissions to use this command.");
+                    return;
+                }
+                cmd_obj.callback(*this, dispatched_msg, args);
+            });
+        } else {
+            cmd_obj.callback(*this, dispatched_msg, args);
+        }
+    }
 }
 
 } // namespace stoatpp

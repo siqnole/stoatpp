@@ -165,8 +165,17 @@ static rest_client::Response perform_request(
 
         if (status < 200 || status >= 300) {
             std::string err_msg;
-            if (resp_body.is_object() && resp_body.contains("error") && resp_body["error"].is_string()) {
-                err_msg = resp_body["error"].get<std::string>();
+            if (resp_body.is_object()) {
+                if (resp_body.contains("type") && resp_body["type"].is_string()) {
+                    err_msg = resp_body["type"].get<std::string>();
+                    if (resp_body.contains("permission") && resp_body["permission"].is_string()) {
+                        err_msg += " (missing permission: " + resp_body["permission"].get<std::string>() + ")";
+                    }
+                } else if (resp_body.contains("error") && resp_body["error"].is_string()) {
+                    err_msg = resp_body["error"].get<std::string>();
+                } else {
+                    err_msg = resp_body.dump();
+                }
             } else {
                 err_msg = "HTTP error " + std::to_string(status);
             }

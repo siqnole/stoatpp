@@ -395,4 +395,58 @@ void event_dispatcher::dispatch_raw_event(const std::string& type, const nlohman
     for (auto& h : handlers) h(type, data);
 }
 
+events::Message events::Message::from_json(const nlohmann::json& j) {
+    events::Message ev;
+    if (j.contains("id")) ev.id = j["id"].get<std::string>();
+    else if (j.contains("_id")) ev.id = j["_id"].get<std::string>();
+    
+    if (j.contains("channel")) ev.channel_id = j["channel"].get<std::string>();
+    else if (j.contains("channel_id")) ev.channel_id = j["channel_id"].get<std::string>();
+
+    if (j.contains("server")) {
+        ev.server_id = j["server"].get<std::string>();
+    } else if (j.contains("member") && j["member"].is_object() && j["member"].contains("_id") && j["member"]["_id"].is_object() && j["member"]["_id"].contains("server")) {
+        ev.server_id = j["member"]["_id"]["server"].get<std::string>();
+    }
+    
+    if (j.contains("user") && j["user"].is_object()) {
+        ev.author = models::User::from_json(j["user"]);
+    } else if (j.contains("author")) {
+        if (j["author"].is_object()) {
+            ev.author = models::User::from_json(j["author"]);
+        } else if (j["author"].is_string()) {
+            ev.author.id = j["author"].get<std::string>();
+        }
+    }
+    
+    if (j.contains("webhook") && j["webhook"].is_object() && j["webhook"].contains("name")) {
+        ev.author.username = j["webhook"]["name"].get<std::string>();
+    }
+
+    if (j.contains("content")) ev.content = j["content"].get<std::string>();
+    if (j.contains("nonce")) ev.nonce = j["nonce"].get<std::string>();
+    if (j.contains("edited") && j["edited"].is_boolean()) ev.edited = j["edited"].get<bool>();
+
+    if (j.contains("replies") && j["replies"].is_array()) {
+        for (const auto& r : j["replies"]) {
+            if (r.is_string()) ev.replies.push_back(r.get<std::string>());
+        }
+    }
+    if (j.contains("mentions") && j["mentions"].is_array()) {
+        for (const auto& m : j["mentions"]) {
+            if (m.is_string()) ev.mentions.push_back(m.get<std::string>());
+        }
+    }
+    if (j.contains("attachments") && j["attachments"].is_array()) {
+        for (const auto& a : j["attachments"]) {
+            if (a.is_string()) ev.attachments.push_back(a.get<std::string>());
+            else if (a.is_object() && a.contains("id") && a["id"].is_string())
+                ev.attachments.push_back(a["id"].get<std::string>());
+        }
+    }
+
+    ev.raw = j;
+    return ev;
+}
+
 } // namespace stoatpp

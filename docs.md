@@ -28,6 +28,10 @@ int main() {
     config.token_type = stoatpp::TokenType::BOT; // use TokenType::SESSION for user tokens
     config.http_respect_ratelimits = true; 
 
+    // --- Command Tweaks (Optional) ---
+    config.dispatch_commands_on_edit = true;  // Run commands when existing command messages are edited
+    config.case_insensitive_commands = true;  // Match commands and aliases case-insensitively
+
     stoatpp::cluster bot("YOUR_TOKEN", config);
 
     bot.on_ready([](const stoatpp::events::Ready& ev) {

@@ -91,6 +91,10 @@ struct ClientConfig {
 
     // --- Bot ownership ---
     std::string owner_id = "";
+
+    // --- Command Handling ---
+    bool dispatch_commands_on_edit = false; // Run commands when command messages are edited/updated
+    bool case_insensitive_commands = false; // Match registered commands case-insensitively
 };
 
 } // namespace stoatpp
