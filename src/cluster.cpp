@@ -242,6 +242,20 @@ cluster::cluster(const std::string& token, ClientConfig config)
                     auto res = rest_.get_message(e.channel_id, e.id);
                     if (res.success()) {
                         auto msg = events::Message::from_json(res.body);
+                        if (msg.server_id.empty() && !msg.channel_id.empty()) {
+                            auto chan = get_channel(msg.channel_id);
+                            if (chan && chan->server) {
+                                msg.server_id = *(chan->server);
+                            } else {
+                                auto chan_res = rest_.get_channel(msg.channel_id);
+                                if (chan_res.success()) {
+                                    auto fetched_chan = models::Channel::from_json(chan_res.body);
+                                    if (fetched_chan.server) {
+                                        msg.server_id = *(fetched_chan.server);
+                                    }
+                                }
+                            }
+                        }
                         dispatch_command(msg);
                     }
                 } catch (const std::exception& err) {
@@ -1402,7 +1416,14 @@ void cluster::on_command_cooldown(std::function<void(cluster&, const events::Mes
     command_cooldown_handler_ = cb;
 }
 
-void cluster::dispatch_command(const events::Message& msg) {
+void cluster::dispatch_command(events::Message msg) {
+    if (msg.server_id.empty() && !msg.channel_id.empty()) {
+        auto chan = get_channel(msg.channel_id);
+        if (chan && chan->server) {
+            msg.server_id = *(chan->server);
+        }
+    }
+
     if (!msg.author.username.empty()) {
         std::lock_guard<std::shared_mutex> lock(cache_mutex_);
         user_cache_[msg.author.id] = msg.author;

@@ -310,7 +310,7 @@ private:
     std::unordered_map<std::string, std::unordered_map<std::string, std::chrono::steady_clock::time_point>> command_cooldowns_;
     mutable std::mutex cooldowns_mutex_;
     void run_timer_loop();
-    void dispatch_command(const events::Message& msg);
+    void dispatch_command(events::Message msg);
 
     std::function<void(cluster&, const events::Message&, const Command&, int64_t remaining_seconds)> command_cooldown_handler_ = nullptr;
     std::function<void(const std::string& method, const std::string& path, int status_code, const std::string& error_msg)> rest_error_handler_ = nullptr;
