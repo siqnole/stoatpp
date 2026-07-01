@@ -343,7 +343,11 @@ void gateway::handle_event(const nlohmann::json& j) {
 
     if (type == "ChannelCreate") {
         events::ChannelCreate ev;
-        ev.channel = models::Channel::from_json(j);
+        if (j.contains("channel") && j["channel"].is_object()) {
+            ev.channel = models::Channel::from_json(j["channel"]);
+        } else {
+            ev.channel = models::Channel::from_json(j);
+        }
         ev.raw = j;
         dispatcher_.dispatch_channel_create(ev);
         return;
@@ -371,7 +375,11 @@ void gateway::handle_event(const nlohmann::json& j) {
 
     if (type == "ServerCreate") {
         events::ServerCreate ev;
-        ev.server = models::Server::from_json(j);
+        if (j.contains("server") && j["server"].is_object()) {
+            ev.server = models::Server::from_json(j["server"]);
+        } else {
+            ev.server = models::Server::from_json(j);
+        }
         ev.raw = j;
         dispatcher_.dispatch_server_create(ev);
         return;

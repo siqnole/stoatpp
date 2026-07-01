@@ -296,6 +296,13 @@ cluster::cluster(const std::string& token, ClientConfig config)
         std::lock_guard<std::shared_mutex> lock(cache_mutex_);
         utils::logger::log(LogLevel::DEBUG, "Caching new server: " + e.server.name + " (" + e.server.id + ")", config_);
         server_cache_[e.server.id] = e.server;
+        
+        if (e.raw.contains("channels") && e.raw["channels"].is_array()) {
+            for (const auto& c_json : e.raw["channels"]) {
+                auto c = models::Channel::from_json(c_json);
+                channel_cache_[c.id] = c;
+            }
+        }
     });
 
     this->on_server_delete([this](const events::ServerDelete& e) {
@@ -1123,6 +1130,15 @@ std::optional<models::Server> cluster::get_server(const std::string& id) const {
     auto it = server_cache_.find(id);
     if (it != server_cache_.end()) return it->second;
     return std::nullopt;
+}
+
+std::vector<models::Server> cluster::get_servers() const {
+    std::shared_lock<std::shared_mutex> lock(cache_mutex_);
+    std::vector<models::Server> servers;
+    for (const auto& [id, srv] : server_cache_) {
+        servers.push_back(srv);
+    }
+    return servers;
 }
 
 std::optional<models::Channel> cluster::get_channel(const std::string& id) const {

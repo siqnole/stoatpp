@@ -222,6 +222,7 @@ public:
     gateway& ws();
 
     std::optional<models::Server>  get_server(const std::string& id) const;
+    std::vector<models::Server>    get_servers() const;
     std::optional<models::Channel> get_channel(const std::string& id) const;
     std::optional<models::User>    get_user(const std::string& id) const;
 
