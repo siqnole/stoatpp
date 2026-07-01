@@ -1432,6 +1432,14 @@ void cluster::on_command_cooldown(std::function<void(cluster&, const events::Mes
     command_cooldown_handler_ = cb;
 }
 
+void cluster::on_command_run(std::function<bool(cluster&, const events::Message&, const Command&, const std::optional<models::Member>&, const std::vector<std::string>&)> cb) {
+    command_run_handler_ = cb;
+}
+
+void cluster::on_command_error(std::function<void(cluster&, const events::Message&, const Command&, const std::string& error_type)> cb) {
+    command_error_handler_ = cb;
+}
+
 void cluster::dispatch_command(events::Message msg) {
     if (msg.server_id.empty() && !msg.channel_id.empty()) {
         auto chan = get_channel(msg.channel_id);
@@ -1529,18 +1537,6 @@ void cluster::dispatch_command(events::Message msg) {
                     lock.unlock();
                     if (command_cooldown_handler_) {
                         command_cooldown_handler_(*this, dispatched_msg, cmd_obj, remaining);
-                    } else {
-                        std::string time_str = "";
-                        if (remaining >= 3600) {
-                            int64_t hours = remaining / 3600;
-                            int64_t mins = (remaining % 3600) / 60;
-                            time_str = std::to_string(hours) + "h " + std::to_string(mins) + "m";
-                        } else if (remaining >= 60) {
-                            time_str = std::to_string(remaining / 60) + "m " + std::to_string(remaining % 60) + "s";
-                        } else {
-                            time_str = std::to_string(remaining) + "s";
-                        }
-                        send_message(dispatched_msg.channel_id, "you are on cooldown. please wait " + time_str + ".");
                     }
                     return;
                 }
@@ -1548,29 +1544,50 @@ void cluster::dispatch_command(events::Message msg) {
             cmd_cooldowns[msg.author.id] = now;
         }
         
-        if (cmd_obj.required_permissions > 0) {
-            if (dispatched_msg.server_id.empty()) {
-                send_message(dispatched_msg.channel_id, "this command can only be used in a server.");
-                return;
-            }
-            
+        if (!dispatched_msg.server_id.empty()) {
             fetch_member(dispatched_msg.server_id, dispatched_msg.author.id, [this, dispatched_msg, args, cmd_obj](models::Member mem, bool success) {
                 if (!success) {
-                    send_message(dispatched_msg.channel_id, "failed to verify your server member permissions.");
+                    if (command_error_handler_) {
+                        command_error_handler_(*this, dispatched_msg, cmd_obj, "member_fetch_failed");
+                    }
                     return;
                 }
-                auto server = get_server(dispatched_msg.server_id);
-                if (!server) {
-                    send_message(dispatched_msg.channel_id, "failed to verify server configuration.");
-                    return;
+                
+                if (command_run_handler_) {
+                    if (!command_run_handler_(*this, dispatched_msg, cmd_obj, mem, args)) {
+                        return; // blocked by interceptor
+                    }
                 }
-                if (!has_permission(*server, mem, cmd_obj.required_permissions)) {
-                    send_message(dispatched_msg.channel_id, "permission error: you do not have the required permissions to use this command.");
-                    return;
+
+                if (cmd_obj.required_permissions > 0) {
+                    auto server = get_server(dispatched_msg.server_id);
+                    if (!server) {
+                        if (command_error_handler_) {
+                            command_error_handler_(*this, dispatched_msg, cmd_obj, "server_resolve_failed");
+                        }
+                        return;
+                    }
+                    if (!has_permission(*server, mem, cmd_obj.required_permissions)) {
+                        if (command_error_handler_) {
+                            command_error_handler_(*this, dispatched_msg, cmd_obj, "permission_denied");
+                        }
+                        return;
+                    }
                 }
                 cmd_obj.callback(*this, dispatched_msg, args);
             });
         } else {
+            if (command_run_handler_) {
+                if (!command_run_handler_(*this, dispatched_msg, cmd_obj, std::nullopt, args)) {
+                    return; // blocked by interceptor
+                }
+            }
+            if (cmd_obj.required_permissions > 0) {
+                if (command_error_handler_) {
+                    command_error_handler_(*this, dispatched_msg, cmd_obj, "server_only");
+                }
+                return;
+            }
             cmd_obj.callback(*this, dispatched_msg, args);
         }
     }

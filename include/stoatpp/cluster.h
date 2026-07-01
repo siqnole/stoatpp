@@ -239,6 +239,8 @@ public:
     bool has_permission(const models::Server& server, const models::Member& member, int64_t permission_mask) const;
     void on_rest_error(std::function<void(const std::string& method, const std::string& path, int status_code, const std::string& error_msg)> cb);
     void on_command_cooldown(std::function<void(cluster&, const events::Message&, const Command&, int64_t remaining_seconds)> cb);
+    void on_command_run(std::function<bool(cluster&, const events::Message&, const Command&, const std::optional<models::Member>&, const std::vector<std::string>&)> cb);
+    void on_command_error(std::function<void(cluster&, const events::Message&, const Command&, const std::string& error_type)> cb);
 
     // Cog modules and Commands APIs
     void use(std::unique_ptr<bot_module> module);
@@ -316,6 +318,8 @@ private:
 
     std::function<void(cluster&, const events::Message&, const Command&, int64_t remaining_seconds)> command_cooldown_handler_ = nullptr;
     std::function<void(const std::string& method, const std::string& path, int status_code, const std::string& error_msg)> rest_error_handler_ = nullptr;
+    std::function<bool(cluster&, const events::Message&, const Command&, const std::optional<models::Member>&, const std::vector<std::string>&)> command_run_handler_ = nullptr;
+    std::function<void(cluster&, const events::Message&, const Command&, const std::string& error_type)> command_error_handler_ = nullptr;
 };
 
 } // namespace stoatpp
