@@ -16,6 +16,7 @@ struct User {
     std::optional<std::string> status_text;
     std::optional<std::string> presence;
     bool bot = false;
+    std::optional<std::string> bot_owner;  // set when user is a bot: ID of the bot's owner
     int flags = 0;
     nlohmann::json raw;                            // original parsed object
 
@@ -76,7 +77,17 @@ inline User User::from_json(const nlohmann::json& j) {
         }
     }
 
-    if (j.contains("bot") && j["bot"].is_boolean()) u.bot = j["bot"].get<bool>();
+    // "bot" is an object {"owner": "<id>"} when present, or null/absent for humans.
+    if (j.contains("bot") && !j["bot"].is_null()) {
+        if (j["bot"].is_object()) {
+            u.bot = true;
+            if (j["bot"].contains("owner") && j["bot"]["owner"].is_string())
+                u.bot_owner = j["bot"]["owner"].get<std::string>();
+        } else if (j["bot"].is_boolean()) {
+            // Fallback: handle if some endpoint still sends a plain bool
+            u.bot = j["bot"].get<bool>();
+        }
+    }
     if (j.contains("flags") && j["flags"].is_number()) u.flags = j["flags"].get<int>();
     return u;
 }
@@ -88,7 +99,13 @@ inline nlohmann::json User::to_json() const {
     j["discriminator"] = discriminator;
     if (display_name) j["display_name"] = *display_name;
     if (avatar) j["avatar"] = *avatar;
-    j["bot"] = bot;
+    if (bot) {
+        nlohmann::json bot_obj = nlohmann::json::object();
+        if (bot_owner) bot_obj["owner"] = *bot_owner;
+        j["bot"] = bot_obj;
+    } else {
+        j["bot"] = nullptr;
+    }
     j["flags"] = flags;
     
     nlohmann::json prof = nlohmann::json::object();

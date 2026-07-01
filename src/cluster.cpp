@@ -271,7 +271,16 @@ cluster::cluster(const std::string& token, ClientConfig config)
         utils::logger::log(LogLevel::DEBUG, "Caching Ready data: user=" + e.user.username + ", servers=" + std::to_string(e.servers.size()) + ", channels=" + std::to_string(e.channels.size()), config_);
         current_user_ = e.user;
         user_cache_[e.user.id] = e.user;
-        
+
+        // Cache ALL users from Ready — their full objects include correct bot flags.
+        // This is the authoritative source for is-bot detection since Revolt omits
+        // the "bot" field from per-message user objects.
+        for (const auto& u : e.users) {
+            if (!u.id.empty()) {
+                user_cache_[u.id] = u;
+            }
+        }
+
         for (const auto& s : e.servers) {
             server_cache_[s.id] = s;
         }

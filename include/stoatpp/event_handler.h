@@ -16,6 +16,7 @@ namespace stoatpp::events {
 
 struct Ready {
     models::User                    user;
+    std::vector<models::User>       users;   // all users from Ready payload (incl. bots)
     std::vector<models::Server>     servers;
     std::vector<models::Channel>    channels;
     std::vector<models::Member>     members;

@@ -269,6 +269,13 @@ void gateway::handle_event(const nlohmann::json& j) {
                 ev.user = pimpl_->self_user;
             }
         }
+
+        // Populate ev.users with ALL users from the Ready payload (preserves bot flags)
+        if (j.contains("users") && j["users"].is_array()) {
+            for (const auto& u : j["users"]) {
+                ev.users.push_back(models::User::from_json(u));
+            }
+        }
         
         if (j.contains("servers") && j["servers"].is_array()) {
             for (const auto& s : j["servers"]) {
