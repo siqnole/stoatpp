@@ -335,17 +335,19 @@ cluster::cluster(const std::string& token, ClientConfig config)
         std::lock_guard<std::shared_mutex> lock(cache_mutex_);
         auto it = server_cache_.find(e.server_id);
         if (it != server_cache_.end()) {
-            utils::logger::log(LogLevel::DEBUG, "Caching new role: " + e.role.name + " (" + e.role_id + ") in server " + e.server_id, config_);
+            auto new_role = e.role;
+            if (new_role.id.empty() && !e.role_id.empty()) new_role.id = e.role_id;
+            utils::logger::log(LogLevel::DEBUG, "Caching new role: " + new_role.name + " (" + new_role.id + ") in server " + e.server_id, config_);
             bool found = false;
             for (auto& r : it->second.roles) {
-                if (r.id == e.role_id) {
-                    r = e.role;
+                if (r.id == new_role.id || (!r.id.empty() && r.id == e.role_id)) {
+                    r = new_role;
                     found = true;
                     break;
                 }
             }
             if (!found) {
-                it->second.roles.push_back(e.role);
+                it->second.roles.push_back(new_role);
             }
         }
     });
@@ -1153,6 +1155,11 @@ std::optional<models::User> cluster::get_user(const std::string& id) const {
     auto it = user_cache_.find(id);
     if (it != user_cache_.end()) return it->second;
     return std::nullopt;
+}
+
+void cluster::cache_server(const models::Server& srv) {
+    std::lock_guard<std::shared_mutex> lock(cache_mutex_);
+    server_cache_[srv.id] = srv;
 }
 
 models::User cluster::current_user() const {

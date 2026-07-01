@@ -475,17 +475,28 @@ void gateway::handle_event(const nlohmann::json& j) {
 
     if (type == "ServerRoleCreate") {
         events::ServerRoleCreate ev;
-        if (j.contains("id")) ev.server_id = j["id"].get<std::string>();
-        if (j.contains("role_id")) ev.role_id = j["role_id"].get<std::string>();
-        if (j.contains("role")) ev.role = models::Role::from_json(j["role"]);
+        if (j.contains("id") && j["id"].is_string()) ev.server_id = j["id"].get<std::string>();
+        else if (j.contains("server_id") && j["server_id"].is_string()) ev.server_id = j["server_id"].get<std::string>();
+        else if (j.contains("server") && j["server"].is_string()) ev.server_id = j["server"].get<std::string>();
+
+        if (j.contains("role_id") && j["role_id"].is_string()) ev.role_id = j["role_id"].get<std::string>();
+        if (j.contains("role")) {
+            nlohmann::json role_j = j["role"];
+            if (!ev.role_id.empty()) role_j["id"] = ev.role_id;
+            ev.role = models::Role::from_json(role_j);
+            if (ev.role.id.empty() && !ev.role_id.empty()) ev.role.id = ev.role_id;
+        }
         dispatcher_.dispatch_server_role_create(ev);
         return;
     }
 
     if (type == "ServerRoleUpdate") {
         events::ServerRoleUpdate ev;
-        if (j.contains("id")) ev.server_id = j["id"].get<std::string>();
-        if (j.contains("role_id")) ev.role_id = j["role_id"].get<std::string>();
+        if (j.contains("id") && j["id"].is_string()) ev.server_id = j["id"].get<std::string>();
+        else if (j.contains("server_id") && j["server_id"].is_string()) ev.server_id = j["server_id"].get<std::string>();
+        else if (j.contains("server") && j["server"].is_string()) ev.server_id = j["server"].get<std::string>();
+
+        if (j.contains("role_id") && j["role_id"].is_string()) ev.role_id = j["role_id"].get<std::string>();
         if (j.contains("data")) ev.data = j["data"];
         if (j.contains("clear") && j["clear"].is_array()) {
             for (const auto& c : j["clear"]) {
@@ -498,8 +509,11 @@ void gateway::handle_event(const nlohmann::json& j) {
 
     if (type == "ServerRoleDelete") {
         events::ServerRoleDelete ev;
-        if (j.contains("id")) ev.server_id = j["id"].get<std::string>();
-        if (j.contains("role_id")) ev.role_id = j["role_id"].get<std::string>();
+        if (j.contains("id") && j["id"].is_string()) ev.server_id = j["id"].get<std::string>();
+        else if (j.contains("server_id") && j["server_id"].is_string()) ev.server_id = j["server_id"].get<std::string>();
+        else if (j.contains("server") && j["server"].is_string()) ev.server_id = j["server"].get<std::string>();
+
+        if (j.contains("role_id") && j["role_id"].is_string()) ev.role_id = j["role_id"].get<std::string>();
         dispatcher_.dispatch_server_role_delete(ev);
         return;
     }

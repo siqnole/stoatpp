@@ -225,6 +225,7 @@ public:
     std::vector<models::Server>    get_servers() const;
     std::optional<models::Channel> get_channel(const std::string& id) const;
     std::optional<models::User>    get_user(const std::string& id) const;
+    void                           cache_server(const models::Server& srv);
 
     models::User current_user() const;
     const ClientConfig& config() const;
