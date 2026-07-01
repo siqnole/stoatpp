@@ -73,6 +73,9 @@ struct MessagePayload {
     // Embeds (send custom embed objects)
     std::vector<nlohmann::json> embeds;
 
+    // Attachments (Autumn file IDs)
+    std::vector<std::string> attachments;
+
     // library-only: auto-delete this message after N seconds (0 = disabled)
     int delete_after = 0;
 
@@ -84,6 +87,10 @@ struct MessagePayload {
     }
     MessagePayload& add_embed(const Embed& embed) {
         embeds.push_back(embed.to_json());
+        return *this;
+    }
+    MessagePayload& add_attachment(const std::string& file_id) {
+        attachments.push_back(file_id);
         return *this;
     }
     MessagePayload& set_delete_after(int seconds) {
@@ -136,6 +143,10 @@ inline nlohmann::json MessagePayload::to_json() const {
     
     if (!embeds.empty()) {
         j["embeds"] = embeds;
+    }
+    
+    if (!attachments.empty()) {
+        j["attachments"] = attachments;
     }
     
     return j;
