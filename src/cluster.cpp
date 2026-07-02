@@ -1610,6 +1610,7 @@ void cluster::dispatch_command(events::Message msg) {
                         return;
                     }
                 }
+                commands_executed_++;
                 cmd_obj.callback(*this, dispatched_msg, args);
             });
         } else {
@@ -1624,6 +1625,7 @@ void cluster::dispatch_command(events::Message msg) {
                 }
                 return;
             }
+            commands_executed_++;
             cmd_obj.callback(*this, dispatched_msg, args);
         }
     }

@@ -231,6 +231,8 @@ public:
 
     void                           cache_server(const models::Server& srv);
 
+
+    uint64_t get_commands_executed() const { return commands_executed_.load(); }
     models::User current_user() const;
     const ClientConfig& config() const;
     const std::string& token() const;
@@ -294,6 +296,8 @@ private:
         int max_pages = 1;
         std::string user_id;
     };
+
+    std::atomic<uint64_t> commands_executed_{0};
     std::unordered_map<std::string, HelpSession> help_sessions_;
     mutable std::mutex help_sessions_mutex_;
 
