@@ -266,6 +266,20 @@ cluster::cluster(const std::string& token, ClientConfig config)
     });
 
     // 2. Local cache synchronisation via ready and incoming events
+
+    this->on_server_member_join([this](const events::ServerMemberJoin& e) {
+        std::lock_guard<std::shared_mutex> lock(cache_mutex_);
+        if (!e.member.server_id.empty() && !e.member.id.empty()) {
+            member_cache_[e.member.server_id][e.member.id] = e.member;
+        }
+    });
+
+    this->on_server_member_leave([this](const events::ServerMemberLeave& e) {
+        std::lock_guard<std::shared_mutex> lock(cache_mutex_);
+        if (!e.server_id.empty() && !e.user_id.empty()) {
+            member_cache_[e.server_id].erase(e.user_id);
+        }
+    });
     this->on_ready([this](const events::Ready& e) {
         std::lock_guard<std::shared_mutex> lock(cache_mutex_);
         utils::logger::log(LogLevel::DEBUG, "Caching Ready data: user=" + e.user.username + ", servers=" + std::to_string(e.servers.size()) + ", channels=" + std::to_string(e.channels.size()), config_);
@@ -286,6 +300,12 @@ cluster::cluster(const std::string& token, ClientConfig config)
         }
         for (const auto& c : e.channels) {
             channel_cache_[c.id] = c;
+        }
+
+        for (const auto& m : e.members) {
+            if (!m.server_id.empty() && !m.id.empty()) {
+                member_cache_[m.server_id][m.id] = m;
+            }
         }
     });
 
@@ -1609,4 +1629,35 @@ void cluster::dispatch_command(events::Message msg) {
     }
 }
 
+std::optional<models::Member> cluster::get_member(const std::string& server_id, const std::string& user_id) {
+    std::shared_lock<std::shared_mutex> lock(cache_mutex_);
+    auto s_it = member_cache_.find(server_id);
+    if (s_it != member_cache_.end()) {
+        auto m_it = s_it->second.find(user_id);
+        if (m_it != s_it->second.end()) {
+            return m_it->second;
+        }
+    }
+    return std::nullopt;
+}
+
+size_t cluster::get_member_count_sync(const std::string& server_id) {
+    std::shared_lock<std::shared_mutex> lock(cache_mutex_);
+    auto s_it = member_cache_.find(server_id);
+    if (s_it != member_cache_.end()) {
+        return s_it->second.size();
+    }
+    return 0;
+}
+
+size_t cluster::get_total_member_count() {
+    std::shared_lock<std::shared_mutex> lock(cache_mutex_);
+    size_t total = 0;
+    for (const auto& kv : member_cache_) {
+        total += kv.second.size();
+    }
+    return total;
+}
+
 } // namespace stoatpp
+

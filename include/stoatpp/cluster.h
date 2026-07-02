@@ -225,6 +225,10 @@ public:
     std::vector<models::Server>    get_servers() const;
     std::optional<models::Channel> get_channel(const std::string& id) const;
     std::optional<models::User>    get_user(const std::string& id) const;
+    std::optional<models::Member>  get_member(const std::string& server_id, const std::string& user_id);
+    size_t                         get_member_count_sync(const std::string& server_id);
+    size_t                         get_total_member_count();
+
     void                           cache_server(const models::Server& srv);
 
     models::User current_user() const;
@@ -273,6 +277,9 @@ private:
     std::unordered_map<std::string, models::Server> server_cache_;
     std::unordered_map<std::string, models::Channel> channel_cache_;
     std::unordered_map<std::string, models::User> user_cache_;
+
+    // Server ID -> User ID -> Member
+    std::unordered_map<std::string, std::unordered_map<std::string, models::Member>> member_cache_;
     models::User current_user_;
 
     // Cogs & Commands state
