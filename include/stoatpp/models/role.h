@@ -15,6 +15,23 @@ struct Role {
 
     static Role from_json(const nlohmann::json& j);
     nlohmann::json to_json() const;
+
+    int64_t allowed_permissions() const {
+        if (permissions.is_number()) {
+            return permissions.get<int64_t>();
+        } else if (permissions.is_object()) {
+            if (permissions.contains("a") && permissions["a"].is_number()) {
+                return permissions["a"].get<int64_t>();
+            }
+            if (permissions.contains("allow") && permissions["allow"].is_number()) {
+                return permissions["allow"].get<int64_t>();
+            }
+            if (permissions.contains("server") && permissions["server"].is_number()) {
+                return permissions["server"].get<int64_t>();
+            }
+        }
+        return 0;
+    }
 };
 
 inline Role Role::from_json(const nlohmann::json& j) {

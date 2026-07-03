@@ -1486,16 +1486,18 @@ bool cluster::has_permission(const models::Server& server, const models::Member&
         return true;
     }
     int64_t allowed = 0;
+    if (server.raw.contains("default_permissions")) {
+        const auto& dp = server.raw["default_permissions"];
+        if (dp.is_number()) {
+            allowed |= dp.get<int64_t>();
+        } else if (dp.is_object() && dp.contains("server") && dp["server"].is_number()) {
+            allowed |= dp["server"].get<int64_t>();
+        }
+    }
     for (const auto& role_id : member.roles) {
         for (const auto& r : server.roles) {
             if (r.id == role_id) {
-                if (r.permissions.is_number()) {
-                    allowed |= r.permissions.get<int64_t>();
-                } else if (r.permissions.is_object() && r.permissions.contains("server")) {
-                    if (r.permissions["server"].is_number()) {
-                        allowed |= r.permissions["server"].get<int64_t>();
-                    }
-                }
+                allowed |= r.allowed_permissions();
             }
         }
     }

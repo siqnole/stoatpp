@@ -22,12 +22,14 @@ constexpr int64_t RemoveAvatars       = 1ULL << 13;
 
 // Channel permissions
 constexpr int64_t ViewChannel         = 1ULL << 20;
-constexpr int64_t SendMessages        = 1ULL << 21;
-constexpr int64_t ManageMessages      = 1ULL << 22;
-constexpr int64_t ManageWebhooks      = 1ULL << 23;
-constexpr int64_t CreateInvites       = 1ULL << 24;
-constexpr int64_t EmbedLinks          = 1ULL << 25;
-constexpr int64_t UploadFiles         = 1ULL << 26;
-constexpr int64_t AddReactions        = 1ULL << 27;
+constexpr int64_t ReadMessageHistory  = 1ULL << 21;
+constexpr int64_t SendMessages        = 1ULL << 22;
+constexpr int64_t ManageMessages      = 1ULL << 23;
+constexpr int64_t ManageWebhooks      = 1ULL << 24;
+constexpr int64_t CreateInvites       = 1ULL << 25;
+constexpr int64_t EmbedLinks          = 1ULL << 26;
+constexpr int64_t UploadFiles         = 1ULL << 27;
+constexpr int64_t Masquerade          = 1ULL << 28;
+constexpr int64_t AddReactions        = 1ULL << 29;
 
 } // namespace stoatpp::permissions
