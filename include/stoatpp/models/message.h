@@ -76,6 +76,13 @@ struct MessagePayload {
     // Attachments (Autumn file IDs)
     std::vector<std::string> attachments;
 
+    // Interactions (reactions and reaction restrictions)
+    struct Interactions {
+        std::vector<std::string> reactions;
+        bool restrict_reactions = false;
+    };
+    std::optional<Interactions> interactions;
+
     // library-only: auto-delete this message after N seconds (0 = disabled)
     int delete_after = 0;
 
@@ -95,6 +102,10 @@ struct MessagePayload {
     }
     MessagePayload& set_delete_after(int seconds) {
         delete_after = seconds;
+        return *this;
+    }
+    MessagePayload& set_interactions(const std::vector<std::string>& rx, bool restrict = false) {
+        interactions = Interactions{rx, restrict};
         return *this;
     }
 
@@ -147,6 +158,15 @@ inline nlohmann::json MessagePayload::to_json() const {
     
     if (!attachments.empty()) {
         j["attachments"] = attachments;
+    }
+    
+    if (interactions) {
+        nlohmann::json inter = nlohmann::json::object();
+        if (!interactions->reactions.empty()) {
+            inter["reactions"] = interactions->reactions;
+        }
+        inter["restrict_reactions"] = interactions->restrict_reactions;
+        j["interactions"] = inter;
     }
     
     return j;
