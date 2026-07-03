@@ -218,6 +218,11 @@ public:
                                  int64_t deny_mask,
                                  std::function<void(bool success)> callback = nullptr);
 
+    void move_channel_to_category(const std::string& server_id,
+                                  const std::string& channel_id,
+                                  const std::string& category_id_or_name,
+                                  std::function<void(bool success)> callback = nullptr);
+
     rest_client& rest();
     gateway& ws();
 

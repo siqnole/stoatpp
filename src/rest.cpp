@@ -405,6 +405,94 @@ rest_client::Response rest_client::edit_server(const std::string& server_id, con
     return patch("/servers/" + server_id, fields);
 }
 
+rest_client::Response rest_client::move_channel_to_category(const std::string& server_id, const std::string& channel_id, const std::string& category_id_or_name) {
+    auto srv_res = get_server(server_id);
+    if (!srv_res.success()) return srv_res;
+
+    nlohmann::json categories = nlohmann::json::array();
+    if (srv_res.body.contains("categories") && srv_res.body["categories"].is_array()) {
+        categories = srv_res.body["categories"];
+    }
+
+    // 1. Remove the channel_id from all existing categories
+    for (auto& cat : categories) {
+        if (cat.contains("channels") && cat["channels"].is_array()) {
+            auto& chs = cat["channels"];
+            for (auto it = chs.begin(); it != chs.end(); ) {
+                if (it->is_string() && it->get<std::string>() == channel_id) {
+                    it = chs.erase(it);
+                } else {
+                    ++it;
+                }
+            }
+        }
+    }
+
+    // 2. Find target category. We match by ID, or case-insensitive title.
+    bool found = false;
+    std::string target = category_id_or_name;
+    std::transform(target.begin(), target.end(), target.begin(), ::tolower);
+
+    for (auto& cat : categories) {
+        bool matches = false;
+        if (cat.contains("id") && cat["id"].is_string() && cat["id"].get<std::string>() == category_id_or_name) {
+            matches = true;
+        } else if (cat.contains("title") && cat["title"].is_string()) {
+            std::string title = cat["title"].get<std::string>();
+            std::transform(title.begin(), title.end(), title.begin(), ::tolower);
+            if (title == target) {
+                matches = true;
+            }
+        }
+
+        if (matches) {
+            if (!cat.contains("channels") || !cat["channels"].is_array()) {
+                cat["channels"] = nlohmann::json::array();
+            }
+            cat["channels"].push_back(channel_id);
+            found = true;
+            break;
+        }
+    }
+
+    // 3. If not found, create a new category (or place in default if that's what was requested)
+    if (!found) {
+        if (target == "default" || target.empty()) {
+            // Find or create default
+            bool found_default = false;
+            for (auto& cat : categories) {
+                if (cat.contains("id") && cat["id"].is_string() && cat["id"].get<std::string>() == "default") {
+                    cat["channels"].push_back(channel_id);
+                    found_default = true;
+                    break;
+                }
+            }
+            if (!found_default) {
+                nlohmann::json def_cat = nlohmann::json::object();
+                def_cat["id"] = "default";
+                def_cat["title"] = "Default";
+                def_cat["channels"] = {channel_id};
+                categories.push_back(def_cat);
+            }
+        } else {
+            // Generate a random ID
+            std::string cat_id = "";
+            const std::string alphabet = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+            for (int i = 0; i < 26; ++i) cat_id += alphabet[rand() % alphabet.length()];
+
+            nlohmann::json new_cat = nlohmann::json::object();
+            new_cat["id"] = cat_id;
+            new_cat["title"] = category_id_or_name;
+            new_cat["channels"] = {channel_id};
+            categories.push_back(new_cat);
+        }
+    }
+
+    nlohmann::json fields;
+    fields["categories"] = categories;
+    return edit_server(server_id, fields);
+}
+
 rest_client::Response rest_client::leave_server(const std::string& server_id) {
     return del("/servers/" + server_id);
 }
@@ -789,9 +877,9 @@ rest_client::Response rest_client::add_reaction(const std::string& channel_id, c
     return put("/channels/" + channel_id + "/messages/" + message_id + "/reactions/" + url_encode(emoji));
 }
 
-rest_client::Response rest_client::set_channel_default_permission(const std::string& channel_id, int64_t permissions) {
+rest_client::Response rest_client::set_channel_default_permission(const std::string& channel_id, int64_t deny_mask) {
     nlohmann::json body;
-    body["permissions"] = permissions;
+    body["permissions"] = {{"allow", 0}, {"deny", deny_mask}};
     return put("/channels/" + channel_id + "/permissions/default", body);
 }
 

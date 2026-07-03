@@ -3,6 +3,7 @@ project(stoatpp VERSION 0.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+add_compile_definitions(JSON_DIAGNOSTICS=1)
 
 option(STOATPP_BUILD_EXAMPLES "Build example bots" ON)
 option(STOATPP_BUILD_CLIENT "Build the chat client application" ON)

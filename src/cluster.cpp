@@ -22,6 +22,33 @@ static std::string url_encode(const std::string& value) {
     return escaped.str();
 }
 
+static std::string to_lower(std::string str) {
+    std::transform(str.begin(), str.end(), str.begin(), [](unsigned char c) {
+        return std::tolower(c);
+    });
+    return str;
+}
+
+static int levenshtein_distance(const std::string& s1, const std::string& s2) {
+    int len1 = s1.size();
+    int len2 = s2.size();
+    std::vector<std::vector<int>> d(len1 + 1, std::vector<int>(len2 + 1));
+
+    for (int i = 0; i <= len1; ++i) d[i][0] = i;
+    for (int j = 0; j <= len2; ++j) d[0][j] = j;
+
+    for (int i = 1; i <= len1; ++i) {
+        for (int j = 1; j <= len2; ++j) {
+            int cost = (s1[i - 1] == s2[j - 1]) ? 0 : 1;
+            d[i][j] = std::min({ d[i - 1][j] + 1,        // deletion
+                                 d[i][j - 1] + 1,        // insertion
+                                 d[i - 1][j - 1] + cost  // substitution
+                               });
+        }
+    }
+    return d[len1][len2];
+}
+
 cluster::cluster(const std::string& token, ClientConfig config)
     : token_(token),
       config_(config),
@@ -1148,6 +1175,21 @@ void cluster::set_channel_permissions(const std::string& channel_id,
     }).detach();
 }
 
+void cluster::move_channel_to_category(const std::string& server_id,
+                                       const std::string& channel_id,
+                                       const std::string& category_id_or_name,
+                                       std::function<void(bool)> callback) {
+    std::thread([this, server_id, channel_id, category_id_or_name, callback]() {
+        try {
+            auto res = rest_.move_channel_to_category(server_id, channel_id, category_id_or_name);
+            if (callback) callback(res.success());
+        } catch (const std::exception& e) {
+            utils::logger::log(LogLevel::ERROR, "Exception in move_channel_to_category: " + std::string(e.what()), config_);
+            if (callback) callback(false);
+        }
+    }).detach();
+}
+
 rest_client& cluster::rest() {
     return rest_;
 }
@@ -1627,6 +1669,74 @@ void cluster::dispatch_command(events::Message msg) {
             }
             commands_executed_++;
             cmd_obj.callback(*this, dispatched_msg, args);
+        }
+    } else {
+        if (cmd.length() > 2) {
+            std::string lower_typed = to_lower(cmd);
+            double max_score = -1.0;
+            std::vector<std::pair<std::string, double>> candidates;
+
+            for (const auto& c : registered_commands_) {
+                double best_cmd_score = -1.0;
+                
+                // Check command name
+                std::string lower_name = to_lower(c.name);
+                int dist = levenshtein_distance(lower_typed, lower_name);
+                double score = 1.0 - static_cast<double>(dist) / std::max(lower_name.length(), lower_typed.length());
+                if (score > best_cmd_score) {
+                    best_cmd_score = score;
+                }
+
+                // Check aliases
+                for (const auto& a : c.aliases) {
+                    std::string lower_alias = to_lower(a);
+                    int alias_dist = levenshtein_distance(lower_typed, lower_alias);
+                    double alias_score = 1.0 - static_cast<double>(alias_dist) / std::max(lower_alias.length(), lower_typed.length());
+                    if (alias_score > best_cmd_score) {
+                        best_cmd_score = alias_score;
+                    }
+                }
+
+                if (best_cmd_score >= 0.5) {
+                    candidates.push_back({c.name, best_cmd_score});
+                    if (best_cmd_score > max_score) {
+                        max_score = best_cmd_score;
+                    }
+                }
+            }
+
+            if (max_score >= 0.5) {
+                std::vector<std::string> suggestions;
+                for (const auto& pair : candidates) {
+                    if (pair.second >= max_score - 0.001) {
+                        suggestions.push_back(pair.first);
+                    }
+                }
+
+                if (!suggestions.empty()) {
+                    std::sort(suggestions.begin(), suggestions.end());
+                    
+                    std::string suggestion_str = "";
+                    if (suggestions.size() == 1) {
+                        suggestion_str = "did you mean **" + suggestions[0] + "**?";
+                    } else {
+                        std::string list_str = "";
+                        for (size_t i = 0; i < suggestions.size(); ++i) {
+                            if (i > 0) {
+                                if (i == suggestions.size() - 1) {
+                                    list_str += " or ";
+                                } else {
+                                    list_str += ", ";
+                                }
+                            }
+                            list_str += suggestions[i];
+                        }
+                        suggestion_str = "did you mean **" + list_str + "**?";
+                    }
+                    
+                    send_message(msg.channel_id, suggestion_str);
+                }
+            }
         }
     }
 }

@@ -99,6 +99,7 @@ public:
     // 3. Servers, Members & Roles
     Response create_server(const std::string& name, const std::optional<std::string>& description = {});
     Response edit_server(const std::string& server_id, const nlohmann::json& fields);
+    Response move_channel_to_category(const std::string& server_id, const std::string& channel_id, const std::string& category_id_or_name);
     Response leave_server(const std::string& server_id);
     Response get_server_invites(const std::string& server_id);
     Response get_server_bans(const std::string& server_id);
