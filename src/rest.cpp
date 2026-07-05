@@ -921,4 +921,29 @@ rest_client::Response rest_client::get_bot_invite_info(const std::string& bot_id
     return get("/bots/" + bot_id + "/invite");
 }
 
+rest_client::Response rest_client::create_message(const std::string& channel_id, const models::MessagePayload& payload) {
+    return post("/channels/" + channel_id + "/messages", payload.to_json());
+}
+
+rest_client::Response rest_client::create_message(const std::string& channel_id, const nlohmann::json& payload_json) {
+    return post("/channels/" + channel_id + "/messages", payload_json);
+}
+
+rest_client::Response rest_client::edit_message(const std::string& channel_id, const std::string& message_id, const nlohmann::json& fields) {
+    return patch("/channels/" + channel_id + "/messages/" + message_id, fields);
+}
+
+rest_client::Response rest_client::delete_message(const std::string& channel_id, const std::string& message_id) {
+    return del("/channels/" + channel_id + "/messages/" + message_id);
+}
+
+rest_client::Response rest_client::edit_role_ranks(const std::string& server_id, const std::vector<std::string>& rank_order) {
+    nlohmann::json body = {{"ranks", rank_order}};
+    return patch("/servers/" + server_id + "/roles/ranks", body);
+}
+
+rest_client::Response rest_client::search_users(const std::string& query) {
+    return get("/users/search?query=" + url_encode(query));
+}
+
 } // namespace stoatpp

@@ -12,6 +12,9 @@ class cluster;
 namespace events {
     struct Message;
 }
+namespace models {
+    struct MessagePayload;
+}
 
 enum class LogLevel {
     NONE = 0,
@@ -95,6 +98,9 @@ struct ClientConfig {
     // --- Command Handling ---
     bool dispatch_commands_on_edit = false; // Run commands when command messages are edited/updated
     bool case_insensitive_commands = false; // Match registered commands case-insensitively
+
+    // --- Masquerade Override ---
+    std::function<void(class cluster&, const std::string&, models::MessagePayload&)> masquerade_handler = nullptr;
 };
 
 } // namespace stoatpp

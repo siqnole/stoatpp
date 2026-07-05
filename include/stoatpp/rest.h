@@ -83,6 +83,10 @@ public:
     Response get_unread_channels();
 
     // 2. Messages, Reactions & Pins
+    Response create_message(const std::string& channel_id, const models::MessagePayload& payload);
+    Response create_message(const std::string& channel_id, const nlohmann::json& payload_json);
+    Response edit_message(const std::string& channel_id, const std::string& message_id, const nlohmann::json& fields);
+    Response delete_message(const std::string& channel_id, const std::string& message_id);
     Response get_messages(const std::string& channel_id, const models::MessageQuery& query);
     Response get_message(const std::string& channel_id, const std::string& message_id);
     Response search_messages(const std::string& channel_id, const models::MessageSearchQuery& query);
@@ -114,6 +118,7 @@ public:
     Response create_role(const std::string& server_id, const std::string& name);
     Response edit_role(const std::string& server_id, const std::string& role_id, const nlohmann::json& fields);
     Response delete_role(const std::string& server_id, const std::string& role_id);
+    Response edit_role_ranks(const std::string& server_id, const std::vector<std::string>& rank_order);
 
     // 4. Channels & Permissions
     Response get_channel(const std::string& channel_id);
@@ -133,6 +138,7 @@ public:
     // 5. Users & Relationships
     Response get_user(const std::string& user_id);
     Response get_user_profile(const std::string& user_id);
+    Response search_users(const std::string& query);
     Response get_user_default_avatar(const std::string& user_id);
     Response get_user_flags(const std::string& user_id);
     Response change_username(const std::string& username, const std::optional<std::string>& password = {});

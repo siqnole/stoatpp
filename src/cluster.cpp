@@ -643,12 +643,15 @@ void cluster::send_reply(const events::Message& to_message,
 }
 
 void cluster::send_message(const std::string& channel_id,
-                           const models::MessagePayload& payload,
+                           const models::MessagePayload& payload_raw,
                            std::function<void(models::Message, bool)> callback) {
+    models::MessagePayload payload = payload_raw;
+    if (config_.masquerade_handler) {
+        config_.masquerade_handler(*this, channel_id, payload);
+    }
     std::thread([this, channel_id, payload, callback]() {
         try {
-            std::string path = "/channels/" + channel_id + "/messages";
-            auto res = rest_.post(path, payload.to_json());
+            auto res = rest_.create_message(channel_id, payload);
             if (res.success()) {
                 auto msg = models::Message::from_json(res.body);
                 if (callback) callback(msg, true);
@@ -658,7 +661,7 @@ void cluster::send_message(const std::string& channel_id,
                     int delay = payload.delete_after;
                     std::thread([this, channel_id, msg_id, delay]() {
                         std::this_thread::sleep_for(std::chrono::seconds(delay));
-                        rest_.del("/channels/" + channel_id + "/messages/" + msg_id);
+                        rest_.delete_message(channel_id, msg_id);
                     }).detach();
                 }
             } else {
@@ -679,9 +682,8 @@ void cluster::edit_message(const std::string& channel_id,
                            std::function<void(models::Message, bool)> callback) {
     std::thread([this, channel_id, message_id, new_content, callback]() {
         try {
-            std::string path = "/channels/" + channel_id + "/messages/" + message_id;
             nlohmann::json body = {{"content", new_content}};
-            auto res = rest_.patch(path, body);
+            auto res = rest_.edit_message(channel_id, message_id, body);
             if (res.success()) {
                 auto msg = models::Message::from_json(res.body);
                 if (callback) callback(msg, true);
@@ -702,8 +704,7 @@ void cluster::edit_message(const std::string& channel_id,
                            std::function<void(models::Message, bool)> callback) {
     std::thread([this, channel_id, message_id, payload, callback]() {
         try {
-            std::string path = "/channels/" + channel_id + "/messages/" + message_id;
-            auto res = rest_.patch(path, payload.to_json());
+            auto res = rest_.edit_message(channel_id, message_id, payload.to_json());
             if (res.success()) {
                 auto msg = models::Message::from_json(res.body);
                 if (callback) callback(msg, true);
@@ -723,8 +724,7 @@ void cluster::delete_message(const std::string& channel_id,
                              std::function<void(bool)> callback) {
     std::thread([this, channel_id, message_id, callback]() {
         try {
-            std::string path = "/channels/" + channel_id + "/messages/" + message_id;
-            auto res = rest_.del(path);
+            auto res = rest_.delete_message(channel_id, message_id);
             if (callback) callback(res.success());
         } catch (const std::exception& e) {
             utils::logger::log(LogLevel::ERROR, "Exception in delete_message: " + std::string(e.what()), config_);
@@ -915,7 +915,7 @@ void cluster::add_role_to_member(const std::string& server_id,
                                  std::function<void(bool, std::string)> callback) {
     std::thread([this, server_id, user_id, role_id, callback]() {
         try {
-            auto get_res = rest_.get("/servers/" + server_id + "/members/" + user_id);
+            auto get_res = rest_.get_server_member(server_id, user_id);
             if (!get_res.success()) {
                 utils::logger::log(LogLevel::ERROR, "add_role_to_member: GET member failed: " + get_res.body.dump(), config_);
                 if (callback) callback(false, "GET_MEMBER_FAILED");
@@ -974,7 +974,7 @@ void cluster::remove_role_from_member(const std::string& server_id,
                                       std::function<void(bool, std::string)> callback) {
     std::thread([this, server_id, user_id, role_id, callback]() {
         try {
-            auto get_res = rest_.get("/servers/" + server_id + "/members/" + user_id);
+            auto get_res = rest_.get_server_member(server_id, user_id);
             if (!get_res.success()) {
                 utils::logger::log(LogLevel::ERROR, "remove_role_from_member: GET member failed: " + get_res.body.dump(), config_);
                 if (callback) callback(false, "GET_MEMBER_FAILED");
@@ -1133,7 +1133,7 @@ void cluster::update_status(const std::string& text,
             nlohmann::json body;
             body["status"] = status_obj;
             
-            auto res = rest_.patch("/users/@me", body);
+            auto res = rest_.edit_current_user(body);
             if (callback) callback(res.success());
         } catch (const std::exception& e) {
             utils::logger::log(LogLevel::ERROR, "Exception in update_status: " + std::string(e.what()), config_);
@@ -1296,7 +1296,7 @@ void cluster::fetch_user(const std::string& user_id, std::function<void(models::
             }
 
             if (!got_user) {
-                auto res = rest_.get("/users/" + user_id);
+                auto res = rest_.get_user(user_id);
                 if (res.success()) {
                     usr = models::User::from_json(res.body);
                     got_user = true;
@@ -1308,7 +1308,7 @@ void cluster::fetch_user(const std::string& user_id, std::function<void(models::
                 return;
             }
 
-            auto prof_res = rest_.get("/users/" + user_id + "/profile");
+            auto prof_res = rest_.get_user_profile(user_id);
             if (prof_res.success()) {
                 const auto& prof = prof_res.body;
                 if (prof.contains("content") && prof["content"].is_string()) {
@@ -1344,7 +1344,7 @@ void cluster::fetch_user(const std::string& user_id, std::function<void(models::
 void cluster::fetch_member(const std::string& server_id, const std::string& user_id, std::function<void(models::Member, bool success)> callback) {
     std::thread([this, server_id, user_id, callback]() {
         try {
-            auto res = rest_.get("/servers/" + server_id + "/members/" + user_id);
+            auto res = rest_.get_server_member(server_id, user_id);
             if (res.success()) {
                 auto mem = models::Member::from_json(res.body);
                 if (callback) callback(mem, true);

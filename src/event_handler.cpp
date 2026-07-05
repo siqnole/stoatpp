@@ -442,6 +442,8 @@ events::Message events::Message::from_json(const nlohmann::json& j) {
             if (a.is_string()) ev.attachments.push_back(a.get<std::string>());
             else if (a.is_object() && a.contains("id") && a["id"].is_string())
                 ev.attachments.push_back(a["id"].get<std::string>());
+            else if (a.is_object() && a.contains("_id") && a["_id"].is_string())
+                ev.attachments.push_back(a["_id"].get<std::string>());
         }
     }
 
