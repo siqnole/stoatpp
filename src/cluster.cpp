@@ -1520,7 +1520,15 @@ void cluster::on_command_error(std::function<void(cluster&, const events::Messag
     command_error_handler_ = cb;
 }
 
+void cluster::set_message_preprocessor(std::function<void(cluster&, events::Message&)> cb) {
+    message_preprocessor_ = cb;
+}
+
 void cluster::dispatch_command(events::Message msg) {
+    if (message_preprocessor_) {
+        message_preprocessor_(*this, msg);
+    }
+
     if (msg.server_id.empty() && !msg.channel_id.empty()) {
         auto chan = get_channel(msg.channel_id);
         if (chan && chan->server) {
