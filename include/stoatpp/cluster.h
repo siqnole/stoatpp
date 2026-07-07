@@ -333,6 +333,9 @@ private:
     mutable std::mutex cooldowns_mutex_;
     void run_timer_loop();
     void dispatch_command(events::Message msg);
+    void setup_cache_listeners();
+    void setup_message_listener();
+    void setup_default_help();
 
     std::function<void(cluster&, const events::Message&, const Command&, int64_t remaining_seconds)> command_cooldown_handler_ = nullptr;
     std::function<void(const std::string& method, const std::string& path, int status_code, const std::string& error_msg)> rest_error_handler_ = nullptr;
