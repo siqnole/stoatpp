@@ -254,6 +254,7 @@ public:
     void on_command_run(std::function<bool(cluster&, const events::Message&, const Command&, const std::optional<models::Member>&, const std::vector<std::string>&)> cb);
     void on_command_error(std::function<void(cluster&, const events::Message&, const Command&, const std::string& error_type)> cb);
     void set_message_preprocessor(std::function<void(cluster&, events::Message&)> cb);
+    std::function<void(const std::string& user_id, const std::string& action, const std::string& reason)> on_moderation_action = nullptr;
 
     // Cog modules and Commands APIs
     void use(std::unique_ptr<bot_module> module);
