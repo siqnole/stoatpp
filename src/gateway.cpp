@@ -7,6 +7,7 @@
 #include <condition_variable>
 #include <atomic>
 #include <chrono>
+#include <queue>
 
 namespace stoatpp {
 
@@ -19,18 +20,53 @@ struct gateway::impl {
     std::atomic<bool> authenticated{false};
     std::atomic<int64_t> latency_ms{0};
     models::User self_user;
+
+    // Background event worker queue
+    std::queue<std::string> event_queue;
+    std::mutex queue_mutex;
+    std::condition_variable queue_cv;
+    std::thread worker_thread;
+    std::atomic<bool> worker_running{false};
 };
+
 
 gateway::gateway(const std::string& token, const ClientConfig& config,
                  event_dispatcher& dispatcher)
     : token_(token), config_(config), dispatcher_(dispatcher), pimpl_(std::make_unique<impl>()) {
     
+    pimpl_->worker_running = true;
+    pimpl_->worker_thread = std::thread([this]() {
+        while (pimpl_->worker_running) {
+            std::string raw;
+            {
+                std::unique_lock<std::mutex> lock(pimpl_->queue_mutex);
+                pimpl_->queue_cv.wait(lock, [this]() {
+                    return !pimpl_->worker_running || !pimpl_->event_queue.empty();
+                });
+                if (!pimpl_->worker_running && pimpl_->event_queue.empty()) {
+                    break;
+                }
+                raw = std::move(pimpl_->event_queue.front());
+                pimpl_->event_queue.pop();
+            }
+            
+            try {
+                nlohmann::json j = nlohmann::json::parse(raw);
+                handle_event(j);
+            } catch (const std::exception& e) {
+                utils::logger::log(LogLevel::ERROR, "Failed to parse WS payload: " + std::string(e.what()), config_);
+            }
+        }
+    });
+
     pimpl_->ws.setOnMessageCallback([this](const ix::WebSocketMessagePtr& msg) {
         if (msg->type == ix::WebSocketMessageType::Message) {
             on_message_received(msg->str);
         } else if (msg->type == ix::WebSocketMessageType::Open) {
             on_connected();
         } else if (msg->type == ix::WebSocketMessageType::Close) {
+            std::string reason = "WebSocket closed. Code: " + std::to_string(msg->closeInfo.code) + ", Reason: " + msg->closeInfo.reason;
+            utils::logger::log(LogLevel::INFO, reason, config_);
             on_disconnected();
         } else if (msg->type == ix::WebSocketMessageType::Error) {
             std::string err_msg = "WebSocket Error: " + msg->errorInfo.reason;
@@ -39,10 +75,17 @@ gateway::gateway(const std::string& token, const ClientConfig& config,
     });
 
     pimpl_->ws.enableAutomaticReconnection();
+    pimpl_->ws.setPingInterval(5);  // WS-level keepalive every 5s as backup
 }
 
 gateway::~gateway() {
     disconnect();
+    
+    pimpl_->worker_running = false;
+    pimpl_->queue_cv.notify_all();
+    if (pimpl_->worker_thread.joinable()) {
+        pimpl_->worker_thread.join();
+    }
 }
 
 void gateway::connect() {
@@ -143,12 +186,11 @@ void gateway::subscribe(const std::string& server_id) {
 
 void gateway::on_message_received(const std::string& raw) {
     utils::logger::log(LogLevel::TRACE, "WS Recv: " + raw, config_);
-    try {
-        nlohmann::json j = nlohmann::json::parse(raw);
-        handle_event(j);
-    } catch (const std::exception& e) {
-        utils::logger::log(LogLevel::ERROR, "Failed to parse WS payload: " + std::string(e.what()), config_);
+    {
+        std::lock_guard<std::mutex> lock(pimpl_->queue_mutex);
+        pimpl_->event_queue.push(raw);
     }
+    pimpl_->queue_cv.notify_one();
 }
 
 void gateway::on_connected() {
@@ -186,6 +228,14 @@ void gateway::schedule_ping() {
     pimpl_->ping_thread_running = true;
     pimpl_->ping_thread = std::thread([this]() {
         utils::logger::log(LogLevel::DEBUG, "Starting Gateway heartbeat thread.", config_);
+
+        // Send first ping immediately instead of waiting the full interval
+        if (is_connected() && pimpl_->authenticated) {
+            auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::system_clock::now().time_since_epoch()).count();
+            ping(now_ms);
+        }
+
         while (pimpl_->ping_thread_running) {
             std::unique_lock<std::mutex> lock(pimpl_->ping_mutex);
             if (pimpl_->ping_cv.wait_for(lock, std::chrono::milliseconds(config_.ws_ping_interval_ms), [this]() {
@@ -195,7 +245,8 @@ void gateway::schedule_ping() {
             }
             
             if (is_connected() && pimpl_->authenticated) {
-                auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+                auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::system_clock::now().time_since_epoch()).count();
                 ping(now_ms);
             }
         }
@@ -222,7 +273,27 @@ void gateway::handle_event(const nlohmann::json& j) {
     if (type == "Authenticated") {
         utils::logger::log(LogLevel::INFO, "Handshake completed. Authenticated successfully.", config_);
         pimpl_->authenticated = true;
+
+        // Send an immediate ping to prevent server-side idle timeout
+        auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::system_clock::now().time_since_epoch()).count();
+        ping(now_ms);
+
         schedule_ping();
+        return;
+    }
+    
+    if (type == "Ping") {
+        if (j.contains("data")) {
+            send_raw(nlohmann::json{
+                {"type", "Pong"},
+                {"data", j["data"]}
+            });
+        } else {
+            send_raw(nlohmann::json{
+                {"type", "Pong"}
+            });
+        }
         return;
     }
     
