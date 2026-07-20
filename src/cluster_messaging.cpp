@@ -95,7 +95,12 @@ void cluster::edit_message(const std::string& channel_id,
                            std::function<void(models::Message, bool)> callback) {
     std::thread([this, channel_id, message_id, payload, callback]() {
         try {
-            auto res = rest_.edit_message(channel_id, message_id, payload.to_json());
+            nlohmann::json body = nlohmann::json::object();
+            body["content"] = payload.content.empty() ? " " : payload.content;
+            if (!payload.embeds.empty()) {
+                body["embeds"] = payload.embeds;
+            }
+            auto res = rest_.edit_message(channel_id, message_id, body);
             if (res.success()) {
                 if (callback) callback(models::Message::from_json(res.body), true);
             } else {
@@ -110,6 +115,7 @@ void cluster::edit_message(const std::string& channel_id,
         }
     }).detach();
 }
+
 
 void cluster::delete_message(const std::string& channel_id,
                              const std::string& message_id,

@@ -302,6 +302,11 @@ void cluster::set_message_preprocessor(std::function<void(cluster&, events::Mess
     message_preprocessor_ = cb;
 }
 
+void cluster::on_command_disabled_check(
+    std::function<bool(cluster&, const events::Message&, const Command&)> cb) {
+    command_disabled_checker_ = cb;
+}
+
 // ---------------------------------------------------------------------------
 // Command dispatch
 // ---------------------------------------------------------------------------
@@ -358,18 +363,25 @@ void cluster::dispatch_command(events::Message msg) {
         std::transform(match_cmd.begin(), match_cmd.end(), match_cmd.begin(), ::tolower);
     }
 
+    // Pass 1: Primary command name exact match
     for (const auto& c : registered_commands_) {
         std::string c_name = c.name;
         if (config_.case_insensitive_commands)
             std::transform(c_name.begin(), c_name.end(), c_name.begin(), ::tolower);
         if (c_name == match_cmd) { cmd_obj = c; found_cmd = true; break; }
-        for (const auto& a : c.aliases) {
-            std::string a_name = a;
-            if (config_.case_insensitive_commands)
-                std::transform(a_name.begin(), a_name.end(), a_name.begin(), ::tolower);
-            if (a_name == match_cmd) { cmd_obj = c; found_cmd = true; break; }
+    }
+
+    // Pass 2: Command alias exact match if no primary name matched
+    if (!found_cmd) {
+        for (const auto& c : registered_commands_) {
+            for (const auto& a : c.aliases) {
+                std::string a_name = a;
+                if (config_.case_insensitive_commands)
+                    std::transform(a_name.begin(), a_name.end(), a_name.begin(), ::tolower);
+                if (a_name == match_cmd) { cmd_obj = c; found_cmd = true; break; }
+            }
+            if (found_cmd) break;
         }
-        if (found_cmd) break;
     }
 
     if (found_cmd) {
@@ -441,6 +453,12 @@ void cluster::dispatch_command(events::Message msg) {
             std::vector<std::pair<std::string, double>> candidates;
 
             for (const auto& c : registered_commands_) {
+                if (command_disabled_checker_) {
+                    if (command_disabled_checker_(*this, msg, c)) {
+                        continue;
+                    }
+                }
+
                 double best = -1.0;
                 std::string lower_name = cmd_to_lower(c.name);
                 int dist = levenshtein_distance(lower_typed, lower_name);

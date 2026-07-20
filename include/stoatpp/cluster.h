@@ -254,6 +254,7 @@ public:
     void on_command_run(std::function<bool(cluster&, const events::Message&, const Command&, const std::optional<models::Member>&, const std::vector<std::string>&)> cb);
     void on_command_error(std::function<void(cluster&, const events::Message&, const Command&, const std::string& error_type)> cb);
     void set_message_preprocessor(std::function<void(cluster&, events::Message&)> cb);
+    void on_command_disabled_check(std::function<bool(cluster&, const events::Message&, const Command&)> cb);
     std::function<void(const std::string& user_id, const std::string& action, const std::string& reason)> on_moderation_action = nullptr;
 
     // Cog modules and Commands APIs
@@ -343,6 +344,7 @@ private:
     std::function<bool(cluster&, const events::Message&, const Command&, const std::optional<models::Member>&, const std::vector<std::string>&)> command_run_handler_ = nullptr;
     std::function<void(cluster&, const events::Message&, const Command&, const std::string& error_type)> command_error_handler_ = nullptr;
     std::function<void(cluster&, events::Message&)> message_preprocessor_ = nullptr;
+    std::function<bool(cluster&, const events::Message&, const Command&)> command_disabled_checker_ = nullptr;
 };
 
 } // namespace stoatpp
