@@ -235,6 +235,8 @@ public:
     size_t                         get_total_member_count();
 
     void                           cache_server(const models::Server& srv);
+    void                           cache_user(const models::User& user);
+    void                           cache_member(const models::Member& member);
 
 
     uint64_t get_commands_executed() const { return commands_executed_.load(); }

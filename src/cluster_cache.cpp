@@ -216,6 +216,20 @@ void cluster::cache_server(const models::Server& srv) {
     server_cache_[srv.id] = srv;
 }
 
+void cluster::cache_user(const models::User& user) {
+    std::lock_guard<std::shared_mutex> lock(cache_mutex_);
+    if (!user.id.empty()) {
+        user_cache_[user.id] = user;
+    }
+}
+
+void cluster::cache_member(const models::Member& member) {
+    std::lock_guard<std::shared_mutex> lock(cache_mutex_);
+    if (!member.server_id.empty() && !member.id.empty()) {
+        member_cache_[member.server_id][member.id] = member;
+    }
+}
+
 models::User cluster::current_user() const {
     std::shared_lock<std::shared_mutex> lock(cache_mutex_);
     return current_user_;

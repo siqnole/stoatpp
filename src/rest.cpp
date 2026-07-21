@@ -27,8 +27,17 @@ rest_client::rest_client(const std::string& token, const ClientConfig& config)
     : token_(token), config_(config) {}
 
 std::string rest_client::Response::error_message() const {
-    if (body.is_object() && body.contains("error") && body["error"].is_string()) {
-        return body["error"].get<std::string>();
+    if (body.is_object()) {
+        if (body.contains("type") && body["type"].is_string()) {
+            std::string msg = body["type"].get<std::string>();
+            if (body.contains("permission") && body["permission"].is_string()) {
+                msg += " (missing permission: " + body["permission"].get<std::string>() + ")";
+            }
+            return msg;
+        }
+        if (body.contains("error") && body["error"].is_string()) {
+            return body["error"].get<std::string>();
+        }
     }
     return "HTTP error " + std::to_string(status_code);
 }
@@ -272,14 +281,64 @@ std::string rest_client::upload_from_url(const std::string& image_url,
 
     auto fetch_res = fetch_cli.Get(path);
     if (!fetch_res || fetch_res->status < 200 || fetch_res->status >= 300) {
-        utils::logger::log(LogLevel::ERROR, "upload_from_url: failed to fetch image", config_);
+        utils::logger::log(LogLevel::ERROR, "upload_from_url: failed to fetch image from " + image_url, config_);
+        return "";
+    }
+
+    if (fetch_res->body.empty()) {
+        utils::logger::log(LogLevel::ERROR, "upload_from_url: fetched empty image data from " + image_url, config_);
         return "";
     }
 
     std::vector<uint8_t> data(fetch_res->body.begin(), fetch_res->body.end());
-    auto up_res = upload_file("/attachments", filename, data, mime_type);
+
+    // Determine effective MIME type and matching file extension
+    std::string effective_mime = mime_type;
+    std::string ct_header = fetch_res->get_header_value("Content-Type");
+    if (!ct_header.empty()) {
+        auto semi = ct_header.find(';');
+        if (semi != std::string::npos) {
+            ct_header = ct_header.substr(0, semi);
+        }
+        ct_header.erase(0, ct_header.find_first_not_of(" \t"));
+        ct_header.erase(ct_header.find_last_not_of(" \t") + 1);
+        if (!ct_header.empty()) {
+            effective_mime = ct_header;
+        }
+    }
+
+    // Magic bytes detection fallback
+    if (data.size() >= 3 && data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF) {
+        effective_mime = "image/jpeg";
+    } else if (data.size() >= 4 && data[0] == 0x89 && data[1] == 'P' && data[2] == 'N' && data[3] == 'G') {
+        effective_mime = "image/png";
+    } else if (data.size() >= 4 && data[0] == 'G' && data[1] == 'I' && data[2] == 'F' && data[3] == '8') {
+        effective_mime = "image/gif";
+    } else if (data.size() >= 12 && data[0] == 'R' && data[1] == 'I' && data[2] == 'F' && data[3] == 'F' &&
+               data[8] == 'W' && data[9] == 'E' && data[10] == 'B' && data[11] == 'P') {
+        effective_mime = "image/webp";
+    }
+
+    std::string effective_filename = filename;
+    std::string target_ext;
+    if (effective_mime == "image/jpeg" || effective_mime == "image/jpg") target_ext = ".jpg";
+    else if (effective_mime == "image/png") target_ext = ".png";
+    else if (effective_mime == "image/gif") target_ext = ".gif";
+    else if (effective_mime == "image/webp") target_ext = ".webp";
+    else if (effective_mime == "image/svg+xml") target_ext = ".svg";
+
+    if (!target_ext.empty()) {
+        size_t dot_pos = effective_filename.rfind('.');
+        if (dot_pos != std::string::npos) {
+            effective_filename = effective_filename.substr(0, dot_pos) + target_ext;
+        } else {
+            effective_filename += target_ext;
+        }
+    }
+
+    auto up_res = upload_file("/attachments", effective_filename, data, effective_mime);
     if (!up_res.success()) {
-        utils::logger::log(LogLevel::ERROR, "upload_from_url: Autumn upload failed: " + up_res.error_message(), config_);
+        utils::logger::log(LogLevel::ERROR, "upload_from_url: Autumn upload failed for " + effective_filename + " (" + effective_mime + "): " + up_res.error_message(), config_);
         return "";
     }
 
