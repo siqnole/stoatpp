@@ -31,8 +31,8 @@ void logger::log(LogLevel level, const std::string& message, const ClientConfig&
     const char* color_code = "\033[1;32m";
     switch (level) {
         case LogLevel::ERROR:   lvl_str = "ERROR"; color_code = "\033[1;31m"; break;
-        case LogLevel::WARNING: lvl_str = "WARN "; color_code = "\033[1;33m"; break;
-        case LogLevel::INFO:    lvl_str = "INFO "; color_code = "\033[1;32m"; break;
+        case LogLevel::WARNING: lvl_str = "WARN"; color_code = "\033[1;33m"; break;
+        case LogLevel::INFO:    lvl_str = "INFO"; color_code = "\033[1;32m"; break;
         case LogLevel::DEBUG:   lvl_str = "DEBUG"; color_code = "\033[1;35m"; break;
         case LogLevel::TRACE:   lvl_str = "TRACE"; color_code = "\033[2;37m"; break;
         default: break;
