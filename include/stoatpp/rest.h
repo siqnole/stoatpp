@@ -3,6 +3,8 @@
 #include <vector>
 #include <functional>
 #include <optional>
+#include <mutex>
+#include <unordered_map>
 #include <nlohmann/json.hpp>
 #include "client_config.h"
 #include "utils/ratelimiter.h"
@@ -206,6 +208,9 @@ private:
     utils::ratelimiter ratelimiter_;
     std::function<void(const std::string& method, const std::string& path, nlohmann::json& body)> pre_request_hook_ = nullptr;
     std::function<void(const std::string& method, const std::string& path, int status_code, const std::string& error_msg)> error_callback_ = nullptr;
+
+    std::unordered_map<std::string, std::string> upload_cache_;
+    std::mutex upload_cache_mutex_;
 };
 
 class IHttpClient {

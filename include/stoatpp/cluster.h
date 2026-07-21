@@ -27,6 +27,12 @@ namespace stoatpp {
 class bot_module;
 class cluster;
 
+enum class CommandRunResult {
+    Deny,                  // Block command execution
+    Allow,                 // Allow command execution (apply default required_permissions check)
+    AllowBypassPermissions // Allow command execution (ignore required_permissions check)
+};
+
 struct timer {
     uint64_t id;
     uint64_t interval_seconds;
@@ -253,7 +259,7 @@ public:
     bool has_permission(const models::Server& server, const models::Member& member, int64_t permission_mask) const;
     void on_rest_error(std::function<void(const std::string& method, const std::string& path, int status_code, const std::string& error_msg)> cb);
     void on_command_cooldown(std::function<void(cluster&, const events::Message&, const Command&, int64_t remaining_seconds)> cb);
-    void on_command_run(std::function<bool(cluster&, const events::Message&, const Command&, const std::optional<models::Member>&, const std::vector<std::string>&)> cb);
+    void on_command_run(std::function<CommandRunResult(cluster&, const events::Message&, const Command&, const std::optional<models::Member>&, const std::vector<std::string>&)> cb);
     void on_command_error(std::function<void(cluster&, const events::Message&, const Command&, const std::string& error_type)> cb);
     void set_message_preprocessor(std::function<void(cluster&, events::Message&)> cb);
     void on_command_disabled_check(std::function<bool(cluster&, const events::Message&, const Command&)> cb);
@@ -343,7 +349,7 @@ private:
 
     std::function<void(cluster&, const events::Message&, const Command&, int64_t remaining_seconds)> command_cooldown_handler_ = nullptr;
     std::function<void(const std::string& method, const std::string& path, int status_code, const std::string& error_msg)> rest_error_handler_ = nullptr;
-    std::function<bool(cluster&, const events::Message&, const Command&, const std::optional<models::Member>&, const std::vector<std::string>&)> command_run_handler_ = nullptr;
+    std::function<CommandRunResult(cluster&, const events::Message&, const Command&, const std::optional<models::Member>&, const std::vector<std::string>&)> command_run_handler_ = nullptr;
     std::function<void(cluster&, const events::Message&, const Command&, const std::string& error_type)> command_error_handler_ = nullptr;
     std::function<void(cluster&, events::Message&)> message_preprocessor_ = nullptr;
     std::function<bool(cluster&, const events::Message&, const Command&)> command_disabled_checker_ = nullptr;

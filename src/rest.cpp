@@ -241,27 +241,66 @@ rest_client::Response rest_client::upload_file(const std::string& path,
         { "file", file_content, filename, mime_type }
     };
 
-    utils::logger::log(LogLevel::DEBUG, "REST: uploading file to Autumn " + path, config_);
-    auto res = cli.Post(path, headers, items);
-    if (!res) {
-        throw NetworkError("File upload to Autumn failed");
-    }
-
-    nlohmann::json resp_body;
-    try {
-        if (!res->body.empty()) {
-            resp_body = nlohmann::json::parse(res->body);
+    int retries = 0;
+    while (true) {
+        utils::logger::log(LogLevel::DEBUG, "REST: uploading file to Autumn " + path, config_);
+        auto res = cli.Post(path, headers, items);
+        if (!res) {
+            std::string err_msg = "File upload to Autumn failed: " + httplib::to_string(res.error());
+            if (retries < config_.http_retry_count) {
+                retries++;
+                utils::logger::log(LogLevel::INFO, "Retrying Autumn upload (" + std::to_string(retries) + "/" + std::to_string(config_.http_retry_count) + ")", config_);
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+                continue;
+            }
+            throw NetworkError(err_msg);
         }
-    } catch (...) {
-        resp_body = nlohmann::json{{"raw_body", res->body}};
-    }
 
-    return Response{res->status, resp_body};
+        int status = res->status;
+        nlohmann::json resp_body;
+        try {
+            if (!res->body.empty()) {
+                resp_body = nlohmann::json::parse(res->body);
+            }
+        } catch (...) {
+            resp_body = nlohmann::json{{"raw_body", res->body}};
+        }
+
+        if (status == 429) {
+            int retry_after = config_.ratelimit_retry_delay_ms;
+            std::string ra_header = res->get_header_value("Retry-After");
+            if (resp_body.is_object() && resp_body.contains("retry_after") && resp_body["retry_after"].is_number()) {
+                retry_after = resp_body["retry_after"].get<int>();
+            } else if (!ra_header.empty()) {
+                try { retry_after = std::stoi(ra_header) * 1000; } catch (...) {}
+            }
+
+            utils::logger::log(LogLevel::WARNING, "Autumn upload rate limited (429). Retrying in " + std::to_string(retry_after) + "ms", config_);
+
+            if (retries < config_.http_retry_count) {
+                retries++;
+                std::this_thread::sleep_for(std::chrono::milliseconds(retry_after));
+                continue;
+            }
+        }
+
+        return Response{status, resp_body};
+    }
 }
 
 std::string rest_client::upload_from_url(const std::string& image_url,
                                          const std::string& filename,
                                          const std::string& mime_type) {
+    if (image_url.empty()) return "";
+
+    {
+        std::lock_guard<std::mutex> lock(upload_cache_mutex_);
+        auto it = upload_cache_.find(image_url);
+        if (it != upload_cache_.end()) {
+            return it->second;
+        }
+    }
+
     // Strip scheme to get host + path for httplib
     std::string url = image_url;
     std::string scheme;
@@ -343,7 +382,12 @@ std::string rest_client::upload_from_url(const std::string& image_url,
     }
 
     if (up_res.body.contains("id") && up_res.body["id"].is_string()) {
-        return up_res.body["id"].get<std::string>();
+        std::string file_id = up_res.body["id"].get<std::string>();
+        {
+            std::lock_guard<std::mutex> lock(upload_cache_mutex_);
+            upload_cache_[image_url] = file_id;
+        }
+        return file_id;
     }
     utils::logger::log(LogLevel::ERROR, "upload_from_url: no id in Autumn response: " + up_res.body.dump(), config_);
     return "";

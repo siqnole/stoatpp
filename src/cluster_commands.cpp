@@ -288,8 +288,8 @@ void cluster::on_command_cooldown(
 }
 
 void cluster::on_command_run(
-    std::function<bool(cluster&, const events::Message&, const Command&,
-                       const std::optional<models::Member>&, const std::vector<std::string>&)> cb) {
+    std::function<CommandRunResult(cluster&, const events::Message&, const Command&,
+                                   const std::optional<models::Member>&, const std::vector<std::string>&)> cb) {
     command_run_handler_ = cb;
 }
 
@@ -415,10 +415,15 @@ void cluster::dispatch_command(events::Message msg) {
                             command_error_handler_(*this, dispatched_msg, cmd_obj, "member_fetch_failed");
                         return;
                     }
+                    bool bypass_permissions = false;
                     if (command_run_handler_) {
-                        if (!command_run_handler_(*this, dispatched_msg, cmd_obj, mem, args)) return;
+                        auto run_res = command_run_handler_(*this, dispatched_msg, cmd_obj, mem, args);
+                        if (run_res == CommandRunResult::Deny) return;
+                        if (run_res == CommandRunResult::AllowBypassPermissions) {
+                            bypass_permissions = true;
+                        }
                     }
-                    if (cmd_obj.required_permissions > 0) {
+                    if (!bypass_permissions && cmd_obj.required_permissions > 0) {
                         auto server = get_server(dispatched_msg.server_id);
                         if (!server) {
                             if (command_error_handler_)
@@ -435,10 +440,15 @@ void cluster::dispatch_command(events::Message msg) {
                     cmd_obj.callback(*this, dispatched_msg, args);
                 });
         } else {
+            bool bypass_permissions = false;
             if (command_run_handler_) {
-                if (!command_run_handler_(*this, dispatched_msg, cmd_obj, std::nullopt, args)) return;
+                auto run_res = command_run_handler_(*this, dispatched_msg, cmd_obj, std::nullopt, args);
+                if (run_res == CommandRunResult::Deny) return;
+                if (run_res == CommandRunResult::AllowBypassPermissions) {
+                    bypass_permissions = true;
+                }
             }
-            if (cmd_obj.required_permissions > 0) {
+            if (!bypass_permissions && cmd_obj.required_permissions > 0) {
                 if (command_error_handler_)
                     command_error_handler_(*this, dispatched_msg, cmd_obj, "server_only");
                 return;
