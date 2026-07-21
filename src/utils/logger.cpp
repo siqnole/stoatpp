@@ -28,19 +28,20 @@ void logger::log(LogLevel level, const std::string& message, const ClientConfig&
     localtime_r(&time_t_now, &buf);
 
     const char* lvl_str = "INFO";
+    const char* color_code = "\033[1;32m";
     switch (level) {
-        case LogLevel::ERROR:   lvl_str = "ERROR"; break;
-        case LogLevel::WARNING: lvl_str = "WARN "; break;
-        case LogLevel::INFO:    lvl_str = "INFO "; break;
-        case LogLevel::DEBUG:   lvl_str = "DEBUG"; break;
-        case LogLevel::TRACE:   lvl_str = "TRACE"; break;
+        case LogLevel::ERROR:   lvl_str = "ERROR"; color_code = "\033[1;31m"; break;
+        case LogLevel::WARNING: lvl_str = "WARN "; color_code = "\033[1;33m"; break;
+        case LogLevel::INFO:    lvl_str = "INFO "; color_code = "\033[1;32m"; break;
+        case LogLevel::DEBUG:   lvl_str = "DEBUG"; color_code = "\033[1;35m"; break;
+        case LogLevel::TRACE:   lvl_str = "TRACE"; color_code = "\033[2;37m"; break;
         default: break;
     }
 
     std::ostream& out = (level == LogLevel::ERROR) ? std::cerr : std::cout;
-    out << "[" << std::put_time(&buf, "%Y-%m-%d %H:%M:%S") << "." 
-        << std::setfill('0') << std::setw(3) << ms.count() << "] "
-        << "[stoat++] [" << lvl_str << "] " << message << std::endl;
+    out << "\033[90m[" << std::put_time(&buf, "%Y-%m-%d %H:%M:%S") << "." 
+        << std::setfill('0') << std::setw(3) << ms.count() << "]\033[0m "
+        << "\033[1;36m[stoat++]\033[0m [" << color_code << lvl_str << "\033[0m] " << message << std::endl;
 }
 
 } // namespace stoatpp::utils
