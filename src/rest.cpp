@@ -703,7 +703,7 @@ rest_client::Response rest_client::get_active_dms() {
 }
 
 rest_client::Response rest_client::open_dm(const std::string& user_id) {
-    return post("/users/" + user_id + "/dm");
+    return get("/users/" + user_id + "/dm");
 }
 
 rest_client::Response rest_client::get_voice_call_info(const std::string& channel_id) {
