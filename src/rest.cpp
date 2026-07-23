@@ -293,13 +293,8 @@ std::string rest_client::upload_from_url(const std::string& image_url,
                                          const std::string& mime_type) {
     if (image_url.empty()) return "";
 
-    {
-        std::lock_guard<std::mutex> lock(upload_cache_mutex_);
-        auto it = upload_cache_.find(image_url);
-        if (it != upload_cache_.end()) {
-            return it->second;
-        }
-    }
+    // Bypass the local upload cache as Revolt/Stoat server requires unique file IDs per message/embed.
+    // The server already de-duplicates file contents based on SHA-256 hash internally.
 
     // Strip scheme to get host + path for httplib
     std::string url = image_url;
@@ -383,10 +378,7 @@ std::string rest_client::upload_from_url(const std::string& image_url,
 
     if (up_res.body.contains("id") && up_res.body["id"].is_string()) {
         std::string file_id = up_res.body["id"].get<std::string>();
-        {
-            std::lock_guard<std::mutex> lock(upload_cache_mutex_);
-            upload_cache_[image_url] = file_id;
-        }
+        // Do not cache the file ID to ensure subsequent requests get a fresh ID.
         return file_id;
     }
     utils::logger::log(LogLevel::ERROR, "upload_from_url: no id in Autumn response: " + up_res.body.dump(), config_);
