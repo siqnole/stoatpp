@@ -100,6 +100,9 @@ void cluster::edit_message(const std::string& channel_id,
             if (!payload.embeds.empty()) {
                 body["embeds"] = payload.embeds;
             }
+            if (!payload.attachments.empty()) {
+                body["attachments"] = payload.attachments;
+            }
             auto res = rest_.edit_message(channel_id, message_id, body);
             if (res.success()) {
                 if (callback) callback(models::Message::from_json(res.body), true);

@@ -147,7 +147,24 @@ inline nlohmann::json MessagePayload::to_json() const {
     if (masquerade) {
         nlohmann::json masq = nlohmann::json::object();
         if (masquerade->name) masq["name"] = *(masquerade->name);
-        if (masquerade->avatar) masq["avatar"] = *(masquerade->avatar);
+        if (masquerade->avatar) {
+            std::string s = *(masquerade->avatar);
+            if (s.rfind("http://", 0) == 0 || s.rfind("https://", 0) == 0) {
+                size_t pos = s.rfind('/');
+                if (pos != std::string::npos && pos + 1 < s.size()) {
+                    std::string id = s.substr(pos + 1);
+                    size_t q = id.find_first_of("?#");
+                    if (q != std::string::npos) {
+                        id = id.substr(0, q);
+                    }
+                    masq["avatar"] = id;
+                } else {
+                    masq["avatar"] = s;
+                }
+            } else {
+                masq["avatar"] = s;
+            }
+        }
         if (masquerade->colour) masq["colour"] = *(masquerade->colour);
         j["masquerade"] = masq;
     }
