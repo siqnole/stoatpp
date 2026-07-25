@@ -313,7 +313,12 @@ std::string rest_client::upload_from_url(const std::string& image_url,
     fetch_cli.set_read_timeout(std::chrono::milliseconds(config_.http_timeout_ms));
     fetch_cli.set_follow_location(true);
 
-    auto fetch_res = fetch_cli.Get(path);
+    httplib::Headers fetch_headers = {
+        {"User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
+        {"Accept", "image/webp,image/png,image/jpeg,image/gif,image/*;q=0.8,*/*;q=0.5"}
+    };
+
+    auto fetch_res = fetch_cli.Get(path, fetch_headers);
     if (!fetch_res || fetch_res->status < 200 || fetch_res->status >= 300) {
         utils::logger::log(LogLevel::ERROR, "upload_from_url: failed to fetch image from " + image_url, config_);
         return "";
