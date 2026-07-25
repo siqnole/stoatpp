@@ -120,7 +120,7 @@ static rest_client::Response perform_request(
             if (error_cb) {
                 error_cb(method, path, 0, err_msg);
             }
-            throw NetworkError(err_msg);
+            return rest_client::Response{0, nlohmann::json{{"error", err_msg}}};
         }
 
         int status = res->status;
@@ -253,7 +253,7 @@ rest_client::Response rest_client::upload_file(const std::string& path,
                 std::this_thread::sleep_for(std::chrono::seconds(1));
                 continue;
             }
-            throw NetworkError(err_msg);
+            return rest_client::Response{0, nlohmann::json{{"error", err_msg}}};
         }
 
         int status = res->status;

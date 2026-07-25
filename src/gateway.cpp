@@ -52,7 +52,22 @@ gateway::gateway(const std::string& token, const ClientConfig& config,
             
             try {
                 nlohmann::json j = nlohmann::json::parse(raw);
-                handle_event(j);
+                std::string type = "";
+                if (j.is_object() && j.contains("type") && j["type"].is_string()) {
+                    type = j["type"].get<std::string>();
+                }
+                
+                if (type == "Ping" || type == "Pong" || type == "Authenticated" || type == "Ready") {
+                    handle_event(j);
+                } else {
+                    std::thread([this, j]() {
+                        try {
+                            handle_event(j);
+                        } catch (const std::exception& e) {
+                            utils::logger::log(LogLevel::ERROR, "Async event handler error: " + std::string(e.what()), config_);
+                        }
+                    }).detach();
+                }
             } catch (const std::exception& e) {
                 utils::logger::log(LogLevel::ERROR, "Failed to parse WS payload: " + std::string(e.what()), config_);
             }
