@@ -153,6 +153,7 @@ void event_dispatcher::dispatch_ready(const events::Ready& e) {
 }
 
 void event_dispatcher::dispatch_message(const events::Message& e) {
+    if (should_ignore_user && should_ignore_user(e.author.id)) return;
     std::vector<std::function<void(const events::Message&)>> handlers;
     {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -180,6 +181,7 @@ void event_dispatcher::dispatch_message_delete(const events::MessageDelete& e) {
 }
 
 void event_dispatcher::dispatch_message_react(const events::MessageReact& e) {
+    if (should_ignore_user && should_ignore_user(e.user_id)) return;
     std::vector<std::function<void(const events::MessageReact&)>> handlers;
     {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -189,6 +191,7 @@ void event_dispatcher::dispatch_message_react(const events::MessageReact& e) {
 }
 
 void event_dispatcher::dispatch_message_unreact(const events::MessageUnreact& e) {
+    if (should_ignore_user && should_ignore_user(e.user_id)) return;
     std::vector<std::function<void(const events::MessageUnreact&)>> handlers;
     {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -252,6 +255,7 @@ void event_dispatcher::dispatch_server_delete(const events::ServerDelete& e) {
 }
 
 void event_dispatcher::dispatch_server_member_join(const events::ServerMemberJoin& e) {
+    if (should_ignore_user && should_ignore_user(e.user_id)) return;
     std::vector<std::function<void(const events::ServerMemberJoin&)>> handlers;
     {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -261,6 +265,7 @@ void event_dispatcher::dispatch_server_member_join(const events::ServerMemberJoi
 }
 
 void event_dispatcher::dispatch_server_member_leave(const events::ServerMemberLeave& e) {
+    if (should_ignore_user && should_ignore_user(e.user_id)) return;
     std::vector<std::function<void(const events::ServerMemberLeave&)>> handlers;
     {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -270,6 +275,7 @@ void event_dispatcher::dispatch_server_member_leave(const events::ServerMemberLe
 }
 
 void event_dispatcher::dispatch_server_member_update(const events::ServerMemberUpdate& e) {
+    if (should_ignore_user && should_ignore_user(e.user_id)) return;
     std::vector<std::function<void(const events::ServerMemberUpdate&)>> handlers;
     {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -279,6 +285,7 @@ void event_dispatcher::dispatch_server_member_update(const events::ServerMemberU
 }
 
 void event_dispatcher::dispatch_user_update(const events::UserUpdate& e) {
+    if (should_ignore_user && should_ignore_user(e.id)) return;
     std::vector<std::function<void(const events::UserUpdate&)>> handlers;
     {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -342,6 +349,7 @@ void event_dispatcher::dispatch_webhook_update(const events::WebhookUpdate& e) {
 }
 
 void event_dispatcher::dispatch_voice_state_update(const events::VoiceStateUpdate& e) {
+    if (should_ignore_user && should_ignore_user(e.user_id)) return;
     std::vector<std::function<void(const events::VoiceStateUpdate&)>> handlers;
     {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -351,6 +359,7 @@ void event_dispatcher::dispatch_voice_state_update(const events::VoiceStateUpdat
 }
 
 void event_dispatcher::dispatch_channel_start_typing(const events::ChannelStartTyping& e) {
+    if (should_ignore_user && should_ignore_user(e.user_id)) return;
     std::vector<std::function<void(const events::ChannelStartTyping&)>> handlers;
     {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -360,6 +369,7 @@ void event_dispatcher::dispatch_channel_start_typing(const events::ChannelStartT
 }
 
 void event_dispatcher::dispatch_channel_stop_typing(const events::ChannelStopTyping& e) {
+    if (should_ignore_user && should_ignore_user(e.user_id)) return;
     std::vector<std::function<void(const events::ChannelStopTyping&)>> handlers;
     {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -397,15 +407,15 @@ void event_dispatcher::dispatch_raw_event(const std::string& type, const nlohman
 
 events::Message events::Message::from_json(const nlohmann::json& j) {
     events::Message ev;
-    if (j.contains("id")) ev.id = j["id"].get<std::string>();
-    else if (j.contains("_id")) ev.id = j["_id"].get<std::string>();
+    if (j.contains("id") && j["id"].is_string()) ev.id = j["id"].get<std::string>();
+    else if (j.contains("_id") && j["_id"].is_string()) ev.id = j["_id"].get<std::string>();
     
-    if (j.contains("channel")) ev.channel_id = j["channel"].get<std::string>();
-    else if (j.contains("channel_id")) ev.channel_id = j["channel_id"].get<std::string>();
+    if (j.contains("channel") && j["channel"].is_string()) ev.channel_id = j["channel"].get<std::string>();
+    else if (j.contains("channel_id") && j["channel_id"].is_string()) ev.channel_id = j["channel_id"].get<std::string>();
 
-    if (j.contains("server")) {
+    if (j.contains("server") && j["server"].is_string()) {
         ev.server_id = j["server"].get<std::string>();
-    } else if (j.contains("member") && j["member"].is_object() && j["member"].contains("_id") && j["member"]["_id"].is_object() && j["member"]["_id"].contains("server")) {
+    } else if (j.contains("member") && j["member"].is_object() && j["member"].contains("_id") && j["member"]["_id"].is_object() && j["member"]["_id"].contains("server") && j["member"]["_id"]["server"].is_string()) {
         ev.server_id = j["member"]["_id"]["server"].get<std::string>();
     }
     
@@ -419,12 +429,12 @@ events::Message events::Message::from_json(const nlohmann::json& j) {
         }
     }
     
-    if (j.contains("webhook") && j["webhook"].is_object() && j["webhook"].contains("name")) {
+    if (j.contains("webhook") && j["webhook"].is_object() && j["webhook"].contains("name") && j["webhook"]["name"].is_string()) {
         ev.author.username = j["webhook"]["name"].get<std::string>();
     }
 
-    if (j.contains("content")) ev.content = j["content"].get<std::string>();
-    if (j.contains("nonce")) ev.nonce = j["nonce"].get<std::string>();
+    if (j.contains("content") && j["content"].is_string()) ev.content = j["content"].get<std::string>();
+    if (j.contains("nonce") && j["nonce"].is_string()) ev.nonce = j["nonce"].get<std::string>();
     if (j.contains("edited") && j["edited"].is_boolean()) ev.edited = j["edited"].get<bool>();
 
     if (j.contains("replies") && j["replies"].is_array()) {

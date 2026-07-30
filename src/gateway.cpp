@@ -27,6 +27,12 @@ struct gateway::impl {
     std::condition_variable queue_cv;
     std::thread worker_thread;
     std::atomic<bool> worker_running{false};
+
+    // Reconnection watchdog
+    std::thread watchdog_thread;
+    std::atomic<bool> watchdog_running{false};
+    std::chrono::steady_clock::time_point last_connected_time;
+    std::mutex watchdog_mutex;
 };
 
 
@@ -94,6 +100,7 @@ gateway::gateway(const std::string& token, const ClientConfig& config,
 }
 
 gateway::~gateway() {
+    stop_watchdog();
     disconnect();
     
     pimpl_->worker_running = false;
@@ -129,9 +136,13 @@ void gateway::connect() {
     utils::logger::log(LogLevel::INFO, "Connecting to Gateway: " + url, config_);
     pimpl_->ws.setUrl(url);
     pimpl_->ws.start();
+    pimpl_->last_connected_time = std::chrono::steady_clock::now();
+    start_watchdog();
 }
 
 void gateway::disconnect() {
+    stop_watchdog();
+    
     if (pimpl_->ping_thread_running) {
         pimpl_->ping_thread_running = false;
         pimpl_->ping_cv.notify_all();
@@ -210,6 +221,7 @@ void gateway::on_message_received(const std::string& raw) {
 
 void gateway::on_connected() {
     utils::logger::log(LogLevel::INFO, "WebSocket connection established.", config_);
+    pimpl_->last_connected_time = std::chrono::steady_clock::now();
     if (!config_.ws_auth_in_url) {
         authenticate(token_);
     } else {
@@ -267,6 +279,65 @@ void gateway::schedule_ping() {
         }
         utils::logger::log(LogLevel::DEBUG, "Gateway heartbeat thread exiting.", config_);
     });
+}
+
+void gateway::start_watchdog() {
+    if (pimpl_->watchdog_running) return;
+    
+    pimpl_->watchdog_running = true;
+    pimpl_->watchdog_thread = std::thread([this]() {
+        utils::logger::log(LogLevel::DEBUG, "Gateway watchdog started.", config_);
+        
+        while (pimpl_->watchdog_running) {
+            std::this_thread::sleep_for(std::chrono::seconds(15));
+            if (!pimpl_->watchdog_running) break;
+            
+            if (!is_connected()) {
+                auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
+                    std::chrono::steady_clock::now() - pimpl_->last_connected_time).count();
+                
+                if (elapsed > 20) {
+                    utils::logger::log(LogLevel::WARNING,
+                        "Gateway watchdog: not connected for " + std::to_string(elapsed) +
+                        "s, attempting reconnection...", config_);
+                    
+                    try {
+                        pimpl_->ws.stop();
+                        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+                        pimpl_->ws.start();
+                        pimpl_->last_connected_time = std::chrono::steady_clock::now();
+                    } catch (const std::exception& e) {
+                        utils::logger::log(LogLevel::ERROR,
+                            "Gateway watchdog reconnection failed: " + std::string(e.what()), config_);
+                    }
+                }
+            } else if (!pimpl_->authenticated) {
+                auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
+                    std::chrono::steady_clock::now() - pimpl_->last_connected_time).count();
+                
+                if (elapsed > 15) {
+                    utils::logger::log(LogLevel::WARNING,
+                        "Gateway watchdog: connected but not authenticated for " +
+                        std::to_string(elapsed) + "s, re-sending Authenticate...", config_);
+                    authenticate(token_);
+                    pimpl_->last_connected_time = std::chrono::steady_clock::now();
+                }
+            }
+        }
+        utils::logger::log(LogLevel::DEBUG, "Gateway watchdog stopped.", config_);
+    });
+}
+
+void gateway::stop_watchdog() {
+    if (!pimpl_->watchdog_running) return;
+    pimpl_->watchdog_running = false;
+    if (pimpl_->watchdog_thread.joinable()) {
+        if (std::this_thread::get_id() == pimpl_->watchdog_thread.get_id()) {
+            pimpl_->watchdog_thread.detach();
+        } else {
+            pimpl_->watchdog_thread.join();
+        }
+    }
 }
 
 void gateway::handle_event(const nlohmann::json& j) {
@@ -395,9 +466,9 @@ void gateway::handle_event(const nlohmann::json& j) {
 
     if (type == "MessageUpdate") {
         events::MessageUpdate ev;
-        if (j.contains("id")) ev.id = j["id"].get<std::string>();
-        if (j.contains("channel_id")) ev.channel_id = j["channel_id"].get<std::string>();
-        else if (j.contains("channel")) ev.channel_id = j["channel"].get<std::string>();
+        if (j.contains("id") && j["id"].is_string()) ev.id = j["id"].get<std::string>();
+        if (j.contains("channel_id") && j["channel_id"].is_string()) ev.channel_id = j["channel_id"].get<std::string>();
+        else if (j.contains("channel") && j["channel"].is_string()) ev.channel_id = j["channel"].get<std::string>();
         if (j.contains("data")) ev.data = j["data"];
         dispatcher_.dispatch_message_update(ev);
         return;
@@ -405,31 +476,31 @@ void gateway::handle_event(const nlohmann::json& j) {
 
     if (type == "MessageDelete") {
         events::MessageDelete ev;
-        if (j.contains("id")) ev.id = j["id"].get<std::string>();
-        if (j.contains("channel_id")) ev.channel_id = j["channel_id"].get<std::string>();
-        else if (j.contains("channel")) ev.channel_id = j["channel"].get<std::string>();
+        if (j.contains("id") && j["id"].is_string()) ev.id = j["id"].get<std::string>();
+        if (j.contains("channel_id") && j["channel_id"].is_string()) ev.channel_id = j["channel_id"].get<std::string>();
+        else if (j.contains("channel") && j["channel"].is_string()) ev.channel_id = j["channel"].get<std::string>();
         dispatcher_.dispatch_message_delete(ev);
         return;
     }
 
     if (type == "MessageReact") {
         events::MessageReact ev;
-        if (j.contains("id")) ev.id = j["id"].get<std::string>();
-        if (j.contains("channel_id")) ev.channel_id = j["channel_id"].get<std::string>();
-        else if (j.contains("channel")) ev.channel_id = j["channel"].get<std::string>();
-        if (j.contains("user_id")) ev.user_id = j["user_id"].get<std::string>();
-        if (j.contains("emoji_id")) ev.emoji_id = j["emoji_id"].get<std::string>();
+        if (j.contains("id") && j["id"].is_string()) ev.id = j["id"].get<std::string>();
+        if (j.contains("channel_id") && j["channel_id"].is_string()) ev.channel_id = j["channel_id"].get<std::string>();
+        else if (j.contains("channel") && j["channel"].is_string()) ev.channel_id = j["channel"].get<std::string>();
+        if (j.contains("user_id") && j["user_id"].is_string()) ev.user_id = j["user_id"].get<std::string>();
+        if (j.contains("emoji_id") && j["emoji_id"].is_string()) ev.emoji_id = j["emoji_id"].get<std::string>();
         dispatcher_.dispatch_message_react(ev);
         return;
     }
 
     if (type == "MessageUnreact") {
         events::MessageUnreact ev;
-        if (j.contains("id")) ev.id = j["id"].get<std::string>();
-        if (j.contains("channel_id")) ev.channel_id = j["channel_id"].get<std::string>();
-        else if (j.contains("channel")) ev.channel_id = j["channel"].get<std::string>();
-        if (j.contains("user_id")) ev.user_id = j["user_id"].get<std::string>();
-        if (j.contains("emoji_id")) ev.emoji_id = j["emoji_id"].get<std::string>();
+        if (j.contains("id") && j["id"].is_string()) ev.id = j["id"].get<std::string>();
+        if (j.contains("channel_id") && j["channel_id"].is_string()) ev.channel_id = j["channel_id"].get<std::string>();
+        else if (j.contains("channel") && j["channel"].is_string()) ev.channel_id = j["channel"].get<std::string>();
+        if (j.contains("user_id") && j["user_id"].is_string()) ev.user_id = j["user_id"].get<std::string>();
+        if (j.contains("emoji_id") && j["emoji_id"].is_string()) ev.emoji_id = j["emoji_id"].get<std::string>();
         dispatcher_.dispatch_message_unreact(ev);
         return;
     }
@@ -448,7 +519,7 @@ void gateway::handle_event(const nlohmann::json& j) {
 
     if (type == "ChannelUpdate") {
         events::ChannelUpdate ev;
-        if (j.contains("id")) ev.id = j["id"].get<std::string>();
+        if (j.contains("id") && j["id"].is_string()) ev.id = j["id"].get<std::string>();
         if (j.contains("data")) ev.data = j["data"];
         if (j.contains("clear") && j["clear"].is_array()) {
             for (const auto& c : j["clear"]) {
@@ -461,7 +532,7 @@ void gateway::handle_event(const nlohmann::json& j) {
 
     if (type == "ChannelDelete") {
         events::ChannelDelete ev;
-        if (j.contains("id")) ev.id = j["id"].get<std::string>();
+        if (j.contains("id") && j["id"].is_string()) ev.id = j["id"].get<std::string>();
         dispatcher_.dispatch_channel_delete(ev);
         return;
     }
@@ -480,7 +551,7 @@ void gateway::handle_event(const nlohmann::json& j) {
 
     if (type == "ServerUpdate") {
         events::ServerUpdate ev;
-        if (j.contains("id")) ev.id = j["id"].get<std::string>();
+        if (j.contains("id") && j["id"].is_string()) ev.id = j["id"].get<std::string>();
         if (j.contains("data")) ev.data = j["data"];
         if (j.contains("clear") && j["clear"].is_array()) {
             for (const auto& c : j["clear"]) {
@@ -493,15 +564,15 @@ void gateway::handle_event(const nlohmann::json& j) {
 
     if (type == "ServerDelete") {
         events::ServerDelete ev;
-        if (j.contains("id")) ev.id = j["id"].get<std::string>();
+        if (j.contains("id") && j["id"].is_string()) ev.id = j["id"].get<std::string>();
         dispatcher_.dispatch_server_delete(ev);
         return;
     }
 
     if (type == "ServerMemberJoin") {
         events::ServerMemberJoin ev;
-        if (j.contains("id")) ev.server_id = j["id"].get<std::string>();
-        if (j.contains("user")) ev.user_id = j["user"].get<std::string>();
+        if (j.contains("id") && j["id"].is_string()) ev.server_id = j["id"].get<std::string>();
+        if (j.contains("user") && j["user"].is_string()) ev.user_id = j["user"].get<std::string>();
         if (j.contains("member")) {
             ev.member = models::Member::from_json(j["member"]);
         } else {
@@ -513,8 +584,8 @@ void gateway::handle_event(const nlohmann::json& j) {
 
     if (type == "ServerMemberLeave") {
         events::ServerMemberLeave ev;
-        if (j.contains("id")) ev.server_id = j["id"].get<std::string>();
-        if (j.contains("user")) ev.user_id = j["user"].get<std::string>();
+        if (j.contains("id") && j["id"].is_string()) ev.server_id = j["id"].get<std::string>();
+        if (j.contains("user") && j["user"].is_string()) ev.user_id = j["user"].get<std::string>();
         dispatcher_.dispatch_server_member_leave(ev);
         return;
     }
@@ -523,8 +594,8 @@ void gateway::handle_event(const nlohmann::json& j) {
         events::ServerMemberUpdate ev;
         if (j.contains("id")) {
             if (j["id"].is_object()) {
-                if (j["id"].contains("server")) ev.server_id = j["id"]["server"].get<std::string>();
-                if (j["id"].contains("user")) ev.user_id = j["id"]["user"].get<std::string>();
+                if (j["id"].contains("server") && j["id"]["server"].is_string()) ev.server_id = j["id"]["server"].get<std::string>();
+                if (j["id"].contains("user") && j["id"]["user"].is_string()) ev.user_id = j["id"]["user"].get<std::string>();
             }
         }
         if (j.contains("data")) ev.data = j["data"];
@@ -539,7 +610,7 @@ void gateway::handle_event(const nlohmann::json& j) {
 
     if (type == "UserUpdate") {
         events::UserUpdate ev;
-        if (j.contains("id")) ev.id = j["id"].get<std::string>();
+        if (j.contains("id") && j["id"].is_string()) ev.id = j["id"].get<std::string>();
         if (j.contains("data")) ev.data = j["data"];
         if (j.contains("clear") && j["clear"].is_array()) {
             for (const auto& c : j["clear"]) {
@@ -552,16 +623,16 @@ void gateway::handle_event(const nlohmann::json& j) {
 
     if (type == "ChannelStartTyping") {
         events::ChannelStartTyping ev;
-        if (j.contains("id")) ev.channel_id = j["id"].get<std::string>();
-        if (j.contains("user")) ev.user_id = j["user"].get<std::string>();
+        if (j.contains("id") && j["id"].is_string()) ev.channel_id = j["id"].get<std::string>();
+        if (j.contains("user") && j["user"].is_string()) ev.user_id = j["user"].get<std::string>();
         dispatcher_.dispatch_channel_start_typing(ev);
         return;
     }
 
     if (type == "ChannelStopTyping") {
         events::ChannelStopTyping ev;
-        if (j.contains("id")) ev.channel_id = j["id"].get<std::string>();
-        if (j.contains("user")) ev.user_id = j["user"].get<std::string>();
+        if (j.contains("id") && j["id"].is_string()) ev.channel_id = j["id"].get<std::string>();
+        if (j.contains("user") && j["user"].is_string()) ev.user_id = j["user"].get<std::string>();
         dispatcher_.dispatch_channel_stop_typing(ev);
         return;
     }

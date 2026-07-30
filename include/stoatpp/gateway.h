@@ -32,6 +32,8 @@ private:
     void on_disconnected();
     void schedule_ping();
     void handle_event(const nlohmann::json& j);
+    void start_watchdog();
+    void stop_watchdog();
 
     struct impl;
     std::string token_;

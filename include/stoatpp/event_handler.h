@@ -142,6 +142,8 @@ namespace stoatpp {
 
 class event_dispatcher {
 public:
+    static inline std::function<bool(const std::string&)> should_ignore_user = nullptr;
+
     void on_ready(std::function<void(const events::Ready&)> cb);
     void on_message(std::function<void(const events::Message&)> cb);
     void on_message_update(std::function<void(const events::MessageUpdate&)> cb);

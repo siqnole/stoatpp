@@ -50,6 +50,13 @@ void cluster::start(bool return_after_init) {
             "Could not fetch node info; using default Autumn URL", config_);
     }
 
+    if (const char *autumn_env = std::getenv("AUTUMN_URL")) {
+        config_.autumn_url = autumn_env;
+        rest_.update_config(config_);
+        utils::logger::log(LogLevel::INFO,
+            "Autumn URL (from env): " + config_.autumn_url, config_);
+    }
+
     timers_running_ = true;
     timer_thread_ = std::thread(&cluster::run_timer_loop, this);
 
