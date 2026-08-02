@@ -98,7 +98,26 @@ void cluster::edit_message(const std::string& channel_id,
             nlohmann::json body = nlohmann::json::object();
             body["content"] = payload.content.empty() ? " " : payload.content;
             if (!payload.embeds.empty()) {
-                body["embeds"] = payload.embeds;
+                nlohmann::json valid_embeds = nlohmann::json::array();
+                for (const auto &emb : payload.embeds) {
+                    if (emb.is_object()) {
+                        bool has_content = false;
+                        for (const std::string &key : {"title", "description", "media", "image", "url", "icon_url"}) {
+                            if (emb.contains(key)) {
+                                if (emb[key].is_string() && !emb[key].get<std::string>().empty()) {
+                                    has_content = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if (has_content) {
+                            valid_embeds.push_back(emb);
+                        }
+                    }
+                }
+                if (!valid_embeds.empty()) {
+                    body["embeds"] = valid_embeds;
+                }
             }
             if (!payload.attachments.empty()) {
                 body["attachments"] = payload.attachments;

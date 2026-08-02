@@ -186,7 +186,26 @@ inline nlohmann::json MessagePayload::to_json() const {
   }
 
   if (!embeds.empty()) {
-    j["embeds"] = embeds;
+    nlohmann::json valid_embeds = nlohmann::json::array();
+    for (const auto &emb : embeds) {
+      if (emb.is_object()) {
+        bool has_content = false;
+        for (const std::string &key : {"title", "description", "media", "image", "url", "icon_url"}) {
+          if (emb.contains(key)) {
+            if (emb[key].is_string() && !emb[key].get<std::string>().empty()) {
+              has_content = true;
+              break;
+            }
+          }
+        }
+        if (has_content) {
+          valid_embeds.push_back(emb);
+        }
+      }
+    }
+    if (!valid_embeds.empty()) {
+      j["embeds"] = valid_embeds;
+    }
   }
 
   if (!attachments.empty()) {
