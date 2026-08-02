@@ -30,7 +30,7 @@ COPY . .
 
 # Build the bot (rm -rf build avoids using host CMakeCache.txt)
 WORKDIR /usr/src/stoatpp/bronx
-RUN rm -rf build && mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release .. && make -j$(nproc)
+RUN rm -rf build CMakeCache.txt CMakeFiles/ && mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release .. && make -j2
 
 # --- Runtime Stage ---
 FROM fedora:44
