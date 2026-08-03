@@ -53,12 +53,12 @@ find_package(OpenSSL REQUIRED)
 # stoat++ library target
 add_library(stoatpp
     src/cluster.cpp
-    src/cluster_cache.cpp
-    src/cluster_events.cpp
-    src/cluster_messaging.cpp
-    src/cluster_moderation.cpp
-    src/cluster_commands.cpp
-    src/cluster_misc.cpp
+    src/cluster/cache.cpp
+    src/cluster/events.cpp
+    src/cluster/messaging.cpp
+    src/cluster/moderation.cpp
+    src/cluster/commands.cpp
+    src/cluster/misc.cpp
     src/rest.cpp
     src/gateway.cpp
     src/event_handler.cpp

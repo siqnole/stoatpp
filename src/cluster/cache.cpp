@@ -1,5 +1,7 @@
 #include "stoatpp/cluster.h"
 #include "stoatpp/utils/logger.h"
+#include <thread>
+#include <chrono>
 
 namespace stoatpp {
 
@@ -80,9 +82,12 @@ void cluster::setup_cache_listeners() {
     });
 
     this->on_server_delete([this](const events::ServerDelete& e) {
-        std::lock_guard<std::shared_mutex> lock(cache_mutex_);
-        utils::logger::log(LogLevel::DEBUG, "Removing server from cache: " + e.id, config_);
-        server_cache_.erase(e.id);
+        std::thread([this, id = e.id]() {
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            std::lock_guard<std::shared_mutex> lock(cache_mutex_);
+            utils::logger::log(LogLevel::DEBUG, "Removing server from cache: " + id, config_);
+            server_cache_.erase(id);
+        }).detach();
     });
 
     this->on_server_update([this](const events::ServerUpdate& e) {
