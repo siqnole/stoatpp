@@ -50,6 +50,10 @@ endif()
 
 find_package(OpenSSL REQUIRED)
 
+set(ENV{PKG_CONFIG_PATH} "/home/linuxbrew/.linuxbrew/lib/pkgconfig:$ENV{PKG_CONFIG_PATH}")
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(PULSE REQUIRED libpulse libpulse-simple)
+
 # stoat++ library target
 add_library(stoatpp
     src/cluster.cpp
@@ -62,6 +66,7 @@ add_library(stoatpp
     src/rest.cpp
     src/gateway.cpp
     src/event_handler.cpp
+    src/pulse_voice.cpp
     src/utils/ratelimiter.cpp
     src/utils/logger.cpp
 )
@@ -69,13 +74,17 @@ add_library(stoatpp
 target_include_directories(stoatpp PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
+    ${PULSE_INCLUDE_DIRS}
 )
+
+target_link_directories(stoatpp PUBLIC ${PULSE_LIBRARY_DIRS})
 
 target_link_libraries(stoatpp PUBLIC
     nlohmann_json::nlohmann_json
     httplib::httplib
     OpenSSL::SSL
     OpenSSL::Crypto
+    ${PULSE_LIBRARIES}
 )
 
 if(NOT STOATPP_USE_BOOST_BEAST)
