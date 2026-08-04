@@ -209,6 +209,15 @@ std::optional<models::Channel> cluster::get_channel(const std::string& id) const
     return std::nullopt;
 }
 
+std::vector<models::Channel> cluster::get_channels() const {
+    std::shared_lock<std::shared_mutex> lock(cache_mutex_);
+    std::vector<models::Channel> channels;
+    for (const auto& [id, chan] : channel_cache_) {
+        channels.push_back(chan);
+    }
+    return channels;
+}
+
 std::optional<models::User> cluster::get_user(const std::string& id) const {
     std::shared_lock<std::shared_mutex> lock(cache_mutex_);
     auto it = user_cache_.find(id);

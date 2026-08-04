@@ -19,6 +19,7 @@ RUN dnf install -y \
     libpng-devel \
     libtiff-devel \
     libwebp-devel \
+    pulseaudio-libs-devel \
     pkgconfig \
     git \
     && dnf clean all
@@ -30,7 +31,7 @@ COPY . .
 
 # Build the bot (rm -rf build avoids using host CMakeCache.txt)
 WORKDIR /usr/src/stoatpp/bronx
-RUN rm -rf build CMakeCache.txt CMakeFiles/ && mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release .. && make -j2
+RUN rm -rf build CMakeCache.txt CMakeFiles/ && mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DSTOATPP_BUILD_CLIENT=OFF -DSTOATPP_BUILD_EXAMPLES=OFF .. && make -j2
 
 # --- Runtime Stage ---
 FROM fedora:44
@@ -48,6 +49,7 @@ RUN dnf install -y \
     libpng \
     libtiff \
     libwebp \
+    pulseaudio-libs \
     && dnf clean all
 
 WORKDIR /app

@@ -235,6 +235,7 @@ public:
     std::optional<models::Server>  get_server(const std::string& id) const;
     std::vector<models::Server>    get_servers() const;
     std::optional<models::Channel> get_channel(const std::string& id) const;
+    std::vector<models::Channel>   get_channels() const;
     std::optional<models::User>    get_user(const std::string& id) const;
     std::optional<models::Member>  get_member(const std::string& server_id, const std::string& user_id);
     size_t                         get_member_count_sync(const std::string& server_id);
