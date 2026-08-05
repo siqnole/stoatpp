@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 project(stoatpp VERSION 0.1.0 LANGUAGES CXX)
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
+cmake_policy(SET CMP0048 NEW)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -30,6 +32,7 @@ FetchContent_Declare(json
     URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz
 )
 FetchContent_MakeAvailable(json)
+set(nlohmann_json_DIR "${json_BINARY_DIR}" CACHE PATH "Path to nlohmann_json config" FORCE)
 
 # cpp-httplib (header-only)
 FetchContent_Declare(httplib
@@ -47,6 +50,32 @@ if(NOT STOATPP_USE_BOOST_BEAST)
     )
     FetchContent_MakeAvailable(ixwebsocket)
 endif()
+
+# libopus (for WebRTC audio encoding)
+set(OPUS_BUILD_TESTS OFF CACHE BOOL "Build tests" FORCE)
+set(OPUS_BUILD_PROGRAMS OFF CACHE BOOL "Build programs" FORCE)
+FetchContent_Declare(opus
+    GIT_REPOSITORY https://github.com/xiph/opus.git
+    GIT_TAG        v1.5.2
+)
+FetchContent_MakeAvailable(opus)
+
+# libdatachannel (for WebRTC media channels)
+# USE_NICE=ON: switch to libnice backend which supports ICE-TCP (required for LiveKit TURN/TCP)
+# Set PKG_CONFIG_PATH before FetchContent so FindLibNice can locate brew's nice.pc
+set(ENV{PKG_CONFIG_PATH} "/home/linuxbrew/.linuxbrew/lib/pkgconfig:$ENV{PKG_CONFIG_PATH}")
+list(PREPEND CMAKE_PREFIX_PATH "/home/linuxbrew/.linuxbrew")
+set(NO_WEBSOCKET ON CACHE BOOL "Disable WebSocket support" FORCE)
+set(NO_SUBMODULES OFF CACHE BOOL "Disable submodules" FORCE)
+set(USE_SYSTEM_JSON ON CACHE BOOL "Use system nlohmann-json" FORCE)
+set(USE_BOOST OFF CACHE BOOL "Use Boost" FORCE)
+set(USE_NICE ON CACHE BOOL "Use libnice instead of libjuice for ICE-TCP support" FORCE)
+FetchContent_Declare(libdatachannel
+    GIT_REPOSITORY https://github.com/paullouisageneau/libdatachannel.git
+    GIT_TAG        v0.21.2
+)
+set(CMAKE_PROJECT_VERSION "2.5.0")
+FetchContent_MakeAvailable(libdatachannel)
 
 find_package(OpenSSL REQUIRED)
 
@@ -67,6 +96,7 @@ add_library(stoatpp
     src/gateway.cpp
     src/event_handler.cpp
     src/pulse_voice.cpp
+    src/voice_connection.cpp
     src/utils/ratelimiter.cpp
     src/utils/logger.cpp
 )
@@ -85,6 +115,8 @@ target_link_libraries(stoatpp PUBLIC
     OpenSSL::SSL
     OpenSSL::Crypto
     ${PULSE_LIBRARIES}
+    datachannel-static
+    opus
 )
 
 if(NOT STOATPP_USE_BOOST_BEAST)
