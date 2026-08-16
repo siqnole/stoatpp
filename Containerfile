@@ -20,6 +20,7 @@ RUN dnf install -y \
     libtiff-devel \
     libwebp-devel \
     pulseaudio-libs-devel \
+    libnice-devel \
     pkgconfig \
     git \
     && dnf clean all
@@ -50,6 +51,7 @@ RUN dnf install -y \
     libtiff \
     libwebp \
     pulseaudio-libs \
+    libnice \
     && dnf clean all
 
 WORKDIR /app

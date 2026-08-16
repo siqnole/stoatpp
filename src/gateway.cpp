@@ -96,7 +96,6 @@ gateway::gateway(const std::string& token, const ClientConfig& config,
     });
 
     pimpl_->ws.enableAutomaticReconnection();
-    pimpl_->ws.setPingInterval(5);  // WS-level keepalive every 5s as backup
 }
 
 gateway::~gateway() {
