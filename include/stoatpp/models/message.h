@@ -57,17 +57,17 @@ struct Embed {
 
   nlohmann::json to_json() const {
     nlohmann::json j;
-    if (title)
+    if (title && !title->empty())
       j["title"] = *title;
-    if (description)
+    if (description && !description->empty())
       j["description"] = *description;
-    if (url)
+    if (url && !url->empty())
       j["url"] = *url;
-    if (icon_url)
+    if (icon_url && !icon_url->empty())
       j["icon_url"] = *icon_url;
-    if (colour)
+    if (colour && !colour->empty())
       j["colour"] = *colour;
-    if (media)
+    if (media && !media->empty())
       j["media"] = *media;
     return j;
   }
@@ -158,7 +158,9 @@ struct Message {
 
 inline nlohmann::json MessagePayload::to_json() const {
   nlohmann::json j = nlohmann::json::object();
-  j["content"] = content;
+  if (!content.empty()) {
+    j["content"] = content;
+  }
   if (nonce)
     j["nonce"] = *nonce;
 
@@ -189,17 +191,24 @@ inline nlohmann::json MessagePayload::to_json() const {
     nlohmann::json valid_embeds = nlohmann::json::array();
     for (const auto &emb : embeds) {
       if (emb.is_object()) {
+        nlohmann::json cleaned_emb = emb;
+        if (cleaned_emb.contains("title") && cleaned_emb["title"].is_string() && cleaned_emb["title"].get<std::string>().empty()) {
+          cleaned_emb.erase("title");
+        }
+        if (cleaned_emb.contains("description") && cleaned_emb["description"].is_string() && cleaned_emb["description"].get<std::string>().empty()) {
+          cleaned_emb.erase("description");
+        }
         bool has_content = false;
         for (const std::string &key : {"title", "description", "media", "image", "url", "icon_url"}) {
-          if (emb.contains(key)) {
-            if (emb[key].is_string() && !emb[key].get<std::string>().empty()) {
+          if (cleaned_emb.contains(key)) {
+            if (cleaned_emb[key].is_string() && !cleaned_emb[key].get<std::string>().empty()) {
               has_content = true;
               break;
             }
           }
         }
         if (has_content) {
-          valid_embeds.push_back(emb);
+          valid_embeds.push_back(cleaned_emb);
         }
       }
     }
@@ -210,6 +219,10 @@ inline nlohmann::json MessagePayload::to_json() const {
 
   if (!attachments.empty()) {
     j["attachments"] = attachments;
+  }
+
+  if (!j.contains("content") && !j.contains("embeds") && !j.contains("attachments")) {
+    j["content"] = " ";
   }
 
   if (interactions) {
