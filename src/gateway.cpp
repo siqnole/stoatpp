@@ -209,6 +209,21 @@ void gateway::subscribe(const std::string& server_id) {
     });
 }
 
+void gateway::join_voice_channel(const std::string& channel_id) {
+    send_raw(nlohmann::json{
+        {"type", "ChannelVoice"},
+        {"id", channel_id}
+    });
+}
+
+void gateway::leave_voice_channel(const std::string& channel_id) {
+    // Send ChannelVoice with null id to signal departure from the channel
+    send_raw(nlohmann::json{
+        {"type", "ChannelVoice"},
+        {"id", nullptr}
+    });
+}
+
 void gateway::on_message_received(const std::string& raw) {
     utils::logger::log(LogLevel::TRACE, "WS Recv: " + raw, config_);
     {
