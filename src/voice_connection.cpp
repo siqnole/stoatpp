@@ -111,6 +111,8 @@ struct voice_connection::impl {
 
     // Send queue and thread variables
     std::thread send_thread;
+    std::thread ping_thread;
+    std::atomic<bool> ping_running{false};
     std::mutex queue_mutex;
     std::condition_variable queue_cv;
     std::queue<int16_t> pcm_queue;
@@ -132,6 +134,7 @@ struct voice_connection::impl {
     }
 
     void stop_thread() {
+        stop_ping_loop();
         {
             std::lock_guard<std::mutex> lock(queue_mutex);
             running = false;
@@ -140,6 +143,34 @@ struct voice_connection::impl {
         if (send_thread.joinable()) {
             send_thread.join();
         }
+    }
+
+    void start_ping_loop() {
+        stop_ping_loop();
+        ping_running = true;
+        ping_thread = std::thread([this]() {
+            while (ping_running) {
+                std::this_thread::sleep_for(std::chrono::seconds(5));
+                if (!ping_running) break;
+                send_ping();
+            }
+        });
+    }
+
+    void stop_ping_loop() {
+        ping_running = false;
+        if (ping_thread.joinable()) {
+            ping_thread.join();
+        }
+    }
+
+    void send_ping() {
+        int64_t now = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::system_clock::now().time_since_epoch()).count();
+        pb_writer req;
+        req.write_key(10, 0); // field 10: ping (varint timestamp)
+        req.write_varint(now);
+        ws.sendBinary(std::string(req.buffer.begin(), req.buffer.end()));
     }
 
     void send_wrapped_join_request() {
@@ -390,6 +421,7 @@ struct voice_connection::impl {
 
         std::cout << "[stoatpp voice] Join response parsed! Found " << ice_servers.size() << " ICE servers.\n";
         initialize_peer_connections();
+        start_ping_loop();
 
         {
             std::lock_guard<std::mutex> lock(connect_mutex);
