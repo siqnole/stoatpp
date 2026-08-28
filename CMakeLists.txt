@@ -30,6 +30,9 @@ FetchContent_Declare(json
     URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz
 )
 FetchContent_MakeAvailable(json)
+# Expose the FetchContent-provided nlohmann_json to any downstream find_package() calls
+# (libdatachannel uses find_package when USE_SYSTEM_JSON=ON)
+set(nlohmann_json_DIR "${json_BINARY_DIR}")
 
 # cpp-httplib (header-only)
 FetchContent_Declare(httplib
@@ -47,6 +50,31 @@ if(NOT STOATPP_USE_BOOST_BEAST)
     )
     FetchContent_MakeAvailable(ixwebsocket)
 endif()
+
+# libopus (for WebRTC audio encoding)
+set(OPUS_BUILD_TESTS OFF CACHE BOOL "Build tests" FORCE)
+set(OPUS_BUILD_PROGRAMS OFF CACHE BOOL "Build programs" FORCE)
+FetchContent_Declare(opus
+    GIT_REPOSITORY https://github.com/xiph/opus.git
+    GIT_TAG        v1.5.2
+)
+FetchContent_MakeAvailable(opus)
+
+# libdatachannel (for WebRTC media channels)
+set(ENV{PKG_CONFIG_PATH} "/home/linuxbrew/.linuxbrew/lib/pkgconfig:$ENV{PKG_CONFIG_PATH}")
+list(PREPEND CMAKE_PREFIX_PATH "/home/linuxbrew/.linuxbrew")
+set(NO_WEBSOCKET ON CACHE BOOL "Disable WebSocket support" FORCE)
+set(NO_SUBMODULES OFF CACHE BOOL "Disable submodules" FORCE)
+set(USE_SYSTEM_JSON ON CACHE BOOL "Use system nlohmann-json" FORCE)
+set(USE_BOOST OFF CACHE BOOL "Use Boost" FORCE)
+set(USE_NICE OFF CACHE BOOL "Use libnice instead of libjuice for ICE-TCP support" FORCE)
+FetchContent_Declare(libdatachannel
+    GIT_REPOSITORY https://github.com/paullouisageneau/libdatachannel.git
+    GIT_TAG        v0.21.2
+)
+set(CMAKE_PROJECT_VERSION "2.5.0")
+set(CMAKE_POLICY_VERSION_MINIMUM "3.5")
+FetchContent_MakeAvailable(libdatachannel)
 
 find_package(OpenSSL REQUIRED)
 
@@ -67,6 +95,7 @@ add_library(stoatpp
     src/gateway.cpp
     src/event_handler.cpp
     src/pulse_voice.cpp
+    src/voice_connection.cpp
     src/utils/ratelimiter.cpp
     src/utils/logger.cpp
 )
@@ -85,6 +114,8 @@ target_link_libraries(stoatpp PUBLIC
     OpenSSL::SSL
     OpenSSL::Crypto
     ${PULSE_LIBRARIES}
+    datachannel-static
+    opus
 )
 
 if(NOT STOATPP_USE_BOOST_BEAST)

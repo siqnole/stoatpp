@@ -8,6 +8,7 @@
 #include "cluster.h"
 #include "bot_module.h"
 #include "pulse_voice.h"
+#include "voice_connection.h"
 
 #include "models/user.h"
 #include "models/role.h"

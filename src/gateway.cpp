@@ -96,7 +96,6 @@ gateway::gateway(const std::string& token, const ClientConfig& config,
     });
 
     pimpl_->ws.enableAutomaticReconnection();
-    pimpl_->ws.setPingInterval(5);  // WS-level keepalive every 5s as backup
 }
 
 gateway::~gateway() {
@@ -207,6 +206,21 @@ void gateway::subscribe(const std::string& server_id) {
     send_raw(nlohmann::json{
         {"type", "Subscribe"},
         {"server_id", server_id}
+    });
+}
+
+void gateway::join_voice_channel(const std::string& channel_id) {
+    send_raw(nlohmann::json{
+        {"type", "ChannelVoice"},
+        {"id", channel_id}
+    });
+}
+
+void gateway::leave_voice_channel(const std::string& channel_id) {
+    // Send ChannelVoice with null id to signal departure from the channel
+    send_raw(nlohmann::json{
+        {"type", "ChannelVoice"},
+        {"id", nullptr}
     });
 }
 

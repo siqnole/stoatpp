@@ -24,6 +24,8 @@ public:
     void begin_typing(const std::string& channel_id);
     void end_typing(const std::string& channel_id);
     void subscribe(const std::string& server_id);
+    void join_voice_channel(const std::string& channel_id);
+    void leave_voice_channel(const std::string& channel_id);
     int64_t ping_latency() const;
 
 private:

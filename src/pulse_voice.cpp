@@ -16,6 +16,7 @@ struct pulse_voice_client::impl {
     bool initialized = false;
     std::string app_name;
     std::string stream_name;
+    audio_callback_t monitor_cb = nullptr;
 };
 
 pulse_voice_client::pulse_voice_client() : pimpl_(std::make_unique<impl>()) {}
@@ -58,10 +59,47 @@ bool pulse_voice_client::is_initialized() const {
 
 bool pulse_voice_client::play_tone(double frequency_hz, double duration_s) {
     if (!pimpl_->initialized) return false;
+
+    size_t num_samples = static_cast<size_t>(pimpl_->ss.rate * duration_s);
+    std::vector<int16_t> samples(num_samples);
     
+    // Generate sine wave
+    for (size_t i = 0; i < num_samples; ++i) {
+        double t = static_cast<double>(i) / pimpl_->ss.rate;
+        samples[i] = static_cast<int16_t>(16384.0 * std::sin(2.0 * M_PI * frequency_hz * t));
+    }
+    
+    if (!write_audio(samples.data(), samples.size() * sizeof(int16_t))) {
+        return false;
+    }
+    return drain();
+}
+
+bool pulse_voice_client::play_chime(bool is_join) {
+    if (!pimpl_->initialized) return false;
+    
+    if (is_join) {
+        // High-pitched double beep for joining (Arpeggio style)
+        play_tone(880.0, 0.15);
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        play_tone(1109.73, 0.25); // C#6
+    } else {
+        // Lower double beep for leaving
+        play_tone(587.33, 0.15); // D5
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        play_tone(440.0, 0.25); // A4
+    }
+    return true;
+}
+
+bool pulse_voice_client::write_audio(const void* data, size_t bytes) {
+    if (!pimpl_->initialized) return false;
+    
+    if (pimpl_->monitor_cb) {
+        pimpl_->monitor_cb(reinterpret_cast<const int16_t*>(data), bytes / sizeof(int16_t));
+    }
+
     int error = 0;
-    
-    // If play stream is not open, open it
     if (!pimpl_->s_play) {
         pimpl_->s_play = pa_simple_new(
             nullptr,
@@ -80,24 +118,9 @@ bool pulse_voice_client::play_tone(double frequency_hz, double duration_s) {
             return false;
         }
     }
-
-    size_t num_samples = static_cast<size_t>(pimpl_->ss.rate * duration_s);
-    std::vector<int16_t> samples(num_samples);
     
-    // Generate sine wave
-    for (size_t i = 0; i < num_samples; ++i) {
-        double t = static_cast<double>(i) / pimpl_->ss.rate;
-        samples[i] = static_cast<int16_t>(16384.0 * std::sin(2.0 * M_PI * frequency_hz * t));
-    }
-    
-    if (pa_simple_write(pimpl_->s_play, samples.data(), samples.size() * sizeof(int16_t), &error) < 0) {
+    if (pa_simple_write(pimpl_->s_play, data, bytes, &error) < 0) {
         std::cerr << "[stoatpp pulse] Failed to write to PulseAudio playback: " 
-                  << pa_strerror(error) << std::endl;
-        return false;
-    }
-    
-    if (pa_simple_drain(pimpl_->s_play, &error) < 0) {
-        std::cerr << "[stoatpp pulse] Failed to drain PulseAudio stream: " 
                   << pa_strerror(error) << std::endl;
         return false;
     }
@@ -105,20 +128,20 @@ bool pulse_voice_client::play_tone(double frequency_hz, double duration_s) {
     return true;
 }
 
-bool pulse_voice_client::play_chime(bool is_join) {
-    if (!pimpl_->initialized) return false;
+void pulse_voice_client::set_audio_monitor(audio_callback_t cb) {
+    pimpl_->monitor_cb = cb;
+}
+
+bool pulse_voice_client::drain() {
+    if (!pimpl_->initialized || !pimpl_->s_play) return false;
     
-    if (is_join) {
-        // High-pitched double beep for joining (Arpeggio style)
-        play_tone(880.0, 0.15);
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
-        play_tone(1109.73, 0.25); // C#6
-    } else {
-        // Lower double beep for leaving
-        play_tone(587.33, 0.15); // D5
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
-        play_tone(440.0, 0.25); // A4
+    int error = 0;
+    if (pa_simple_drain(pimpl_->s_play, &error) < 0) {
+        std::cerr << "[stoatpp pulse] Failed to drain PulseAudio stream: " 
+                  << pa_strerror(error) << std::endl;
+        return false;
     }
+    
     return true;
 }
 
