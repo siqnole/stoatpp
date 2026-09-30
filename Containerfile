@@ -50,6 +50,7 @@ RUN dnf install -y \
     libtiff \
     libwebp \
     pulseaudio-libs \
+    && mkdir -p /var/lib/mysql /run/mariadb \
     && dnf clean all
 
 WORKDIR /app
