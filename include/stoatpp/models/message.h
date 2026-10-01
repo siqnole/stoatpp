@@ -158,7 +158,8 @@ struct Message {
 
 inline nlohmann::json MessagePayload::to_json() const {
   nlohmann::json j = nlohmann::json::object();
-  j["content"] = content;
+  if (!content.empty())
+    j["content"] = content;
   if (nonce)
     j["nonce"] = *nonce;
 
