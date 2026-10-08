@@ -52,6 +52,15 @@ static rest_client::Response perform_request(
     std::function<void(const std::string&, const std::string&, nlohmann::json&)> pre_hook,
     std::function<void(const std::string&, const std::string&, int, const std::string&)> error_cb = nullptr
 ) {
+    if (path.find("00000000000000000000000000") != std::string::npos ||
+        path.find("<#") != std::string::npos ||
+        path.find("<@") != std::string::npos ||
+        path.find("https:") != std::string::npos ||
+        path.find("http:") != std::string::npos) {
+        utils::logger::log(LogLevel::WARNING, "REST: rejected request to invalid path '" + path + "'", config);
+        return rest_client::Response{404, nlohmann::json{{"type", "NotFound"}, {"error", "Invalid ID in request path"}}};
+    }
+
     if (pre_hook) {
         pre_hook(method, path, body);
     }

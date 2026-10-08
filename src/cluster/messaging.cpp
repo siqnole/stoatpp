@@ -1,17 +1,18 @@
 #include "stoatpp/cluster.h"
 #include "stoatpp/utils/logger.h"
+#include "stoatpp/utils/ulid.h"
 #include <thread>
 #include <atomic>
 #include <algorithm>
 
 namespace stoatpp {
 
-void cluster::send_message(const std::string& channel_id,
+void cluster::send_message(const std::string& channel_id_raw,
                            const std::string& content,
                            std::function<void(models::Message, bool success)> callback) {
     models::MessagePayload payload;
     payload.content = content;
-    send_message(channel_id, payload, callback);
+    send_message(channel_id_raw, payload, callback);
 }
 
 void cluster::send_reply(const std::string& channel_id,
@@ -32,10 +33,33 @@ void cluster::send_reply(const events::Message& to_message,
     send_reply(to_message.channel_id, to_message.id, content, mention, callback);
 }
 
-void cluster::send_message(const std::string& channel_id,
+void cluster::send_message(const std::string& channel_id_raw,
                            const models::MessagePayload& payload_raw,
                            std::function<void(models::Message, bool)> callback) {
+    std::string channel_id = utils::extract_ulid(channel_id_raw);
+    if (channel_id.empty() && utils::is_valid_ulid(channel_id_raw)) {
+        channel_id = channel_id_raw;
+    }
+
+    if (channel_id.empty()) {
+        utils::logger::log(LogLevel::WARNING,
+            "send_message aborted: invalid channel_id '" + channel_id_raw + "'", config_);
+        if (callback) callback(models::Message{}, false);
+        return;
+    }
+
     models::MessagePayload payload = payload_raw;
+    // Filter out empty or invalid attachment IDs
+    std::vector<std::string> valid_attachments;
+    for (const auto& att : payload.attachments) {
+        if (!att.empty() && utils::is_valid_ulid(att)) {
+            valid_attachments.push_back(att);
+        } else if (!att.empty()) {
+            utils::logger::log(LogLevel::WARNING, "send_message: dropping invalid attachment ID '" + att + "'", config_);
+        }
+    }
+    payload.attachments = valid_attachments;
+
     if (config_.masquerade_handler) {
         config_.masquerade_handler(*this, channel_id, payload);
     }
@@ -55,7 +79,7 @@ void cluster::send_message(const std::string& channel_id,
                 }
             } else {
                 utils::logger::log(LogLevel::ERROR,
-                    "Failed to send message: " + res.error_message() + " | body: " + res.body.dump(), config_);
+                    "Failed to send message to channel " + channel_id + ": " + res.error_message() + " | body: " + res.body.dump(), config_);
                 if (callback) callback(models::Message{}, false);
             }
         } catch (const std::exception& e) {
