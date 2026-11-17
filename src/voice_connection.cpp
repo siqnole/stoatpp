@@ -10,6 +10,7 @@
 #include <condition_variable>
 #include <nlohmann/json.hpp>
 #include <chrono>
+#include <atomic>
 
 namespace stoatpp {
 
@@ -115,6 +116,9 @@ struct voice_connection::impl {
     std::condition_variable queue_cv;
     std::queue<int16_t> pcm_queue;
     bool running = false;
+    std::thread ping_thread;
+    std::atomic<bool> ping_running{false};
+    int ping_interval_ms = 5000;
 
     std::string my_cid = "audio-track-0";
     std::string track_sid;
@@ -132,6 +136,7 @@ struct voice_connection::impl {
     }
 
     void stop_thread() {
+        ping_running = false;
         {
             std::lock_guard<std::mutex> lock(queue_mutex);
             running = false;
@@ -139,6 +144,9 @@ struct voice_connection::impl {
         queue_cv.notify_all();
         if (send_thread.joinable()) {
             send_thread.join();
+        }
+        if (ping_thread.joinable()) {
+            ping_thread.join();
         }
     }
 
@@ -175,7 +183,7 @@ struct voice_connection::impl {
     }
 
     void send_sdp_answer(const std::string& sdp) {
-        std::cout << "[stoatpp voice] Sending Subscriber SDP Answer:\n" << sdp << "\n";
+        std::cout << "[stoatpp voice] Sending subscriber SDP answer\n";
         // SessionDescription
         pb_writer sdp_msg;
         sdp_msg.write_string(1, "answer");
@@ -189,7 +197,7 @@ struct voice_connection::impl {
     }
 
     void send_sdp_offer(const std::string& sdp) {
-        std::cout << "[stoatpp voice] Sending Publisher SDP Offer:\n" << sdp << "\n";
+        std::cout << "[stoatpp voice] Sending publisher SDP offer\n";
         // SessionDescription
         pb_writer sdp_msg;
         sdp_msg.write_string(1, "offer");
@@ -203,7 +211,7 @@ struct voice_connection::impl {
     }
 
     void send_trickle(const std::string& cand_json, SignalTarget target) {
-        std::cout << "[stoatpp voice] Sending Trickle Candidate (target=" << target << "): " << cand_json << "\n";
+        std::cout << "[stoatpp voice] Sending ICE candidate (target=" << target << ")\n";
         // TrickleRequest
         pb_writer trickle;
         trickle.write_string(1, cand_json);
@@ -311,13 +319,25 @@ struct voice_connection::impl {
                         std::string cand_line = cand_j.value("candidate", "");
                         std::string mid = cand_j.value("sdpMid", "");
                         if (!cand_line.empty()) {
+                            rtc::Candidate candidate(cand_line, mid);
+                            std::cout << "[stoatpp voice] Received ICE candidate "
+                                      << "(target=" << target
+                                      << ", type=" << candidate.type()
+                                      << ", transport=" << candidate.transportType()
+                                      << ")\n";
                             if (target == SignalTarget::SUBSCRIBER && sub_pc) {
-                                sub_pc->addRemoteCandidate(rtc::Candidate(cand_line, mid));
+                                sub_pc->addRemoteCandidate(std::move(candidate));
                             } else if (target == SignalTarget::PUBLISHER && pub_pc) {
-                                pub_pc->addRemoteCandidate(rtc::Candidate(cand_line, mid));
+                                pub_pc->addRemoteCandidate(std::move(candidate));
+                            } else {
+                                std::cout << "[stoatpp voice] Ignored ICE candidate "
+                                             "for unavailable peer connection\n";
                             }
                         }
-                    } catch (...) {}
+                    } catch (const std::exception&) {
+                        std::cout << "[stoatpp voice] Failed to process remote ICE "
+                                     "candidate (details suppressed)\n";
+                    }
                 }
             }
             else if (field_num == 6 && wire_type == 2) { // track_published
@@ -366,7 +386,12 @@ struct voice_connection::impl {
             int field_num = key >> 3;
             int wire_type = key & 7;
 
-            if (field_num == 5 && wire_type == 2) { // ice_servers
+            if (field_num == 11 && wire_type == 0) { // ping_interval, seconds
+                const uint64_t interval_seconds = reader.read_varint();
+                if (interval_seconds > 0 && interval_seconds <= 60)
+                    ping_interval_ms = static_cast<int>(interval_seconds * 1000);
+            }
+            else if (field_num == 5 && wire_type == 2) { // ice_servers
                 uint64_t len = reader.read_varint();
                 pb_reader s_reader{reader.data + reader.offset, len};
                 reader.offset += len;
@@ -397,8 +422,40 @@ struct voice_connection::impl {
         }
         connect_cv.notify_all();
 
+        start_ping_thread();
+
         // Join completed, request to publish track
         send_add_track();
+    }
+
+    void start_ping_thread() {
+        if (ping_running.exchange(true))
+            return;
+        ping_thread = std::thread([this]() {
+            const auto interval = std::chrono::milliseconds(ping_interval_ms);
+            while (ping_running) {
+                const auto deadline = std::chrono::steady_clock::now() + interval;
+                while (ping_running &&
+                       std::chrono::steady_clock::now() < deadline) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                }
+                if (!ping_running)
+                    break;
+
+                pb_writer ping;
+                const auto now = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::system_clock::now().time_since_epoch()).count();
+                ping.write_key(1, 0);
+                ping.write_varint(static_cast<uint64_t>(now));
+
+                pb_writer request;
+                request.write_key(14, 0); // deprecated SignalRequest.ping
+                request.write_varint(static_cast<uint64_t>(now));
+                request.write_message(16, ping.buffer); // SignalRequest.ping_req
+                ws.sendBinary(std::string(request.buffer.begin(),
+                                          request.buffer.end()));
+            }
+        });
     }
 
     // Parse a TURN/STUN URL and add it to config as a proper rtc::IceServer struct.
@@ -441,8 +498,7 @@ struct voice_connection::impl {
             auto relay = (scheme == "turns") ? rtc::IceServer::RelayType::TurnTls
                                               : rtc::IceServer::RelayType::TurnUdp;
             std::cout << "[stoatpp voice] ICE TURN (" << scheme << "): "
-                      << hostname << ":" << port
-                      << " user=" << username << "\n";
+                      << hostname << ":" << port << "\n";
             config.iceServers.emplace_back(hostname, port, username, credential, relay);
         }
     }
@@ -462,6 +518,9 @@ struct voice_connection::impl {
             send_sdp_answer(std::string(description));
         });
         sub_pc->onLocalCandidate([this](rtc::Candidate candidate) {
+            std::cout << "[stoatpp voice] Local subscriber ICE candidate "
+                      << "(type=" << candidate.type()
+                      << ", transport=" << candidate.transportType() << ")\n";
             nlohmann::json cand_j;
             cand_j["candidate"] = std::string(candidate);
             cand_j["sdpMid"] = candidate.mid();
@@ -471,6 +530,13 @@ struct voice_connection::impl {
         sub_pc->onStateChange([](rtc::PeerConnection::State state) {
             std::cout << "[stoatpp voice] Subscriber PC State: " << state << "\n";
         });
+        sub_pc->onIceStateChange([](rtc::PeerConnection::IceState state) {
+            std::cout << "[stoatpp voice] Subscriber ICE State: " << state << "\n";
+        });
+        sub_pc->onGatheringStateChange([](rtc::PeerConnection::GatheringState state) {
+            std::cout << "[stoatpp voice] Subscriber ICE gathering: " << state
+                      << "\n";
+        });
 
         std::cout << "[stoatpp voice] Creating Publisher PeerConnection...\n";
         pub_pc = std::make_shared<rtc::PeerConnection>(config);
@@ -479,6 +545,9 @@ struct voice_connection::impl {
             send_sdp_offer(std::string(description));
         });
         pub_pc->onLocalCandidate([this](rtc::Candidate candidate) {
+            std::cout << "[stoatpp voice] Local publisher ICE candidate "
+                      << "(type=" << candidate.type()
+                      << ", transport=" << candidate.transportType() << ")\n";
             nlohmann::json cand_j;
             cand_j["candidate"] = std::string(candidate);
             cand_j["sdpMid"] = candidate.mid();
@@ -487,6 +556,13 @@ struct voice_connection::impl {
         });
         pub_pc->onStateChange([](rtc::PeerConnection::State state) {
             std::cout << "[stoatpp voice] Publisher PC State: " << state << "\n";
+        });
+        pub_pc->onIceStateChange([](rtc::PeerConnection::IceState state) {
+            std::cout << "[stoatpp voice] Publisher ICE State: " << state << "\n";
+        });
+        pub_pc->onGatheringStateChange([](rtc::PeerConnection::GatheringState state) {
+            std::cout << "[stoatpp voice] Publisher ICE gathering: " << state
+                      << "\n";
         });
     }
 
@@ -580,7 +656,7 @@ bool voice_connection::connect(const std::string& ws_url, const std::string& tok
     pimpl_->ice_servers.clear();
 
     std::string rtc_url = ws_url + "/rtc?access_token=" + token + "&protocol=8&sdk=cpp";
-    std::cout << "[stoatpp voice] Connecting to WSS signaling: " << rtc_url << "\n";
+    std::cout << "[stoatpp voice] Connecting to LiveKit signaling\n";
     pimpl_->ws.setUrl(rtc_url);
 
     pimpl_->ws.setOnMessageCallback([this](const ix::WebSocketMessagePtr& msg) {

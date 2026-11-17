@@ -1014,8 +1014,10 @@ rest_client::Response rest_client::get_group_members(const std::string& channel_
     return get("/channels/" + channel_id + "/members");
 }
 
-rest_client::Response rest_client::join_voice_call(const std::string& channel_id) {
-    return post("/channels/" + channel_id + "/join_call");
+rest_client::Response rest_client::join_voice_call(const std::string& channel_id,
+                                                    const std::string& node) {
+    return post("/channels/" + channel_id + "/join_call",
+                nlohmann::json{{"node", node}});
 }
 
 rest_client::Response rest_client::end_voice_ring(const std::string& channel_id, const std::string& user_id) {

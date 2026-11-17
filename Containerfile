@@ -20,6 +20,7 @@ RUN dnf install -y \
     libtiff-devel \
     libwebp-devel \
     pulseaudio-libs-devel \
+    libnice-devel \
     pkgconfig \
     git \
     && dnf clean all
@@ -50,6 +51,10 @@ RUN dnf install -y \
     libtiff \
     libwebp \
     pulseaudio-libs \
+    libnice \
+    && dnf install -y --setopt=install_weak_deps=False \
+    ffmpeg-free \
+    yt-dlp \
     && mkdir -p /var/lib/mysql /run/mariadb \
     && dnf clean all
 

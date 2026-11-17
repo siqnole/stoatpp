@@ -67,7 +67,7 @@ set(NO_WEBSOCKET ON CACHE BOOL "Disable WebSocket support" FORCE)
 set(NO_SUBMODULES OFF CACHE BOOL "Disable submodules" FORCE)
 set(USE_SYSTEM_JSON ON CACHE BOOL "Use system nlohmann-json" FORCE)
 set(USE_BOOST OFF CACHE BOOL "Use Boost" FORCE)
-set(USE_NICE OFF CACHE BOOL "Use libnice instead of libjuice for ICE-TCP support" FORCE)
+set(USE_NICE ON CACHE BOOL "Use libnice for TURN-over-TLS support" FORCE)
 FetchContent_Declare(libdatachannel
     GIT_REPOSITORY https://github.com/paullouisageneau/libdatachannel.git
     GIT_TAG        v0.21.2
@@ -140,4 +140,3 @@ endif()
 if(STOATPP_BUILD_CLIENT)
     add_subdirectory(client)
 endif()
-

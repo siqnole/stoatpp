@@ -49,13 +49,13 @@ void cluster::send_message(const std::string& channel_id_raw,
     }
 
     models::MessagePayload payload = payload_raw;
-    // Filter out empty or invalid attachment IDs
+    // Attachment IDs are opaque Autumn identifiers and are not necessarily ULIDs.
     std::vector<std::string> valid_attachments;
     for (const auto& att : payload.attachments) {
-        if (!att.empty() && utils::is_valid_ulid(att)) {
+        if (!att.empty()) {
             valid_attachments.push_back(att);
-        } else if (!att.empty()) {
-            utils::logger::log(LogLevel::WARNING, "send_message: dropping invalid attachment ID '" + att + "'", config_);
+        } else {
+            utils::logger::log(LogLevel::WARNING, "send_message: dropping empty attachment ID", config_);
         }
     }
     payload.attachments = valid_attachments;

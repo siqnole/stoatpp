@@ -723,12 +723,62 @@ void gateway::handle_event(const nlohmann::json& j) {
         return;
     }
 
-    if (type == "VoiceStateUpdate") {
+    auto dispatch_voice_state = [this](const std::string& channel_id,
+                                       const std::string& user_id,
+                                       bool joined) {
         events::VoiceStateUpdate ev;
-        if (j.contains("channel_id")) ev.channel_id = j["channel_id"].get<std::string>();
-        if (j.contains("user_id")) ev.user_id = j["user_id"].get<std::string>();
-        if (j.contains("joined") && j["joined"].is_boolean()) ev.joined = j["joined"].get<bool>();
+        ev.channel_id = channel_id;
+        ev.user_id = user_id;
+        ev.joined = joined;
         dispatcher_.dispatch_voice_state_update(ev);
+    };
+
+    if (type == "VoiceChannelJoin") {
+        if (j.contains("id") && j["id"].is_string() &&
+            j.contains("state") && j["state"].is_object() &&
+            j["state"].contains("id") && j["state"]["id"].is_string()) {
+            dispatch_voice_state(j["id"].get<std::string>(),
+                                 j["state"]["id"].get<std::string>(), true);
+        }
+        return;
+    }
+
+    if (type == "VoiceChannelLeave") {
+        if (j.contains("id") && j["id"].is_string() &&
+            j.contains("user") && j["user"].is_string()) {
+            dispatch_voice_state(j["id"].get<std::string>(),
+                                 j["user"].get<std::string>(), false);
+        }
+        return;
+    }
+
+    if (type == "VoiceChannelMove") {
+        if (j.contains("user") && j["user"].is_string()) {
+            const std::string user_id = j["user"].get<std::string>();
+            if (j.contains("from") && j["from"].is_string())
+                dispatch_voice_state(j["from"].get<std::string>(), user_id, false);
+            if (j.contains("to") && j["to"].is_string())
+                dispatch_voice_state(j["to"].get<std::string>(), user_id, true);
+        }
+        return;
+    }
+
+    if (type == "VoiceStateUpdate") {
+        const std::string channel_id =
+            j.contains("channel_id") && j["channel_id"].is_string()
+                ? j["channel_id"].get<std::string>()
+                : (j.contains("id") && j["id"].is_string()
+                       ? j["id"].get<std::string>()
+                       : "");
+        const std::string user_id =
+            j.contains("user_id") && j["user_id"].is_string()
+                ? j["user_id"].get<std::string>()
+                : "";
+        const bool joined =
+            j.contains("joined") && j["joined"].is_boolean() &&
+            j["joined"].get<bool>();
+        if (!user_id.empty())
+            dispatch_voice_state(channel_id, user_id, joined);
         return;
     }
 }

@@ -180,7 +180,8 @@ public:
     Response get_voice_call_info(const std::string& channel_id);
     Response create_group(const std::string& name, const std::vector<std::string>& users = {});
     Response get_group_members(const std::string& channel_id);
-    Response join_voice_call(const std::string& channel_id);
+    Response join_voice_call(const std::string& channel_id,
+                             const std::string& node);
     Response end_voice_ring(const std::string& channel_id, const std::string& user_id);
 
     // 9. Custom Bot Management
