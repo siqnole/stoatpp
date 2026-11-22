@@ -74,12 +74,32 @@ static rest_client::Response perform_request(
         }
     }
 
+    struct ThreadHttpClient {
+        std::unique_ptr<httplib::Client> cli;
+        std::string base_url;
+        int timeout_ms = 0;
+
+        httplib::Client& get(const ClientConfig& cfg) {
+            if (!cli || base_url != cfg.api_base_url || timeout_ms != cfg.http_timeout_ms) {
+                cli = std::make_unique<httplib::Client>(cfg.api_base_url);
+                cli->set_connection_timeout(std::chrono::milliseconds(cfg.http_timeout_ms));
+                cli->set_read_timeout(std::chrono::milliseconds(cfg.http_timeout_ms));
+                cli->set_keep_alive(true);
+                base_url = cfg.api_base_url;
+                timeout_ms = cfg.http_timeout_ms;
+            }
+            return *cli;
+        }
+
+        void reset() {
+            cli.reset();
+        }
+    };
+    thread_local ThreadHttpClient tl_http;
+
     int retries = 0;
     while (true) {
-        // Parse host from api_base_url (cpp-httplib works best when constructor takes the scheme+host)
-        httplib::Client cli(config.api_base_url);
-        cli.set_connection_timeout(std::chrono::milliseconds(config.http_timeout_ms));
-        cli.set_read_timeout(std::chrono::milliseconds(config.http_timeout_ms));
+        httplib::Client& cli = tl_http.get(config);
 
         httplib::Headers headers;
         if (config.token_type == TokenType::BOT) {
@@ -93,7 +113,7 @@ static rest_client::Response perform_request(
         }
 
         httplib::Result res;
-        std::string req_body_str = body.is_null() ? "" : body.dump();
+        std::string req_body_str = body.is_null() ? "" : body.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
         
         utils::logger::log(LogLevel::DEBUG, "REST: sending " + method + " " + path, config);
 
@@ -117,6 +137,7 @@ static rest_client::Response perform_request(
 
         if (!res) {
             auto err = res.error();
+            tl_http.reset();
             std::string err_msg = "Connection failed on " + method + " " + path + ": " + httplib::to_string(err);
             utils::logger::log(LogLevel::ERROR, err_msg, config);
             
