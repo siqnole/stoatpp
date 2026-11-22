@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.20)
 project(stoatpp VERSION 0.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -51,30 +51,19 @@ if(NOT STOATPP_USE_BOOST_BEAST)
     FetchContent_MakeAvailable(ixwebsocket)
 endif()
 
-# libopus (for WebRTC audio encoding)
-set(OPUS_BUILD_TESTS OFF CACHE BOOL "Build tests" FORCE)
-set(OPUS_BUILD_PROGRAMS OFF CACHE BOOL "Build programs" FORCE)
-FetchContent_Declare(opus
-    GIT_REPOSITORY https://github.com/xiph/opus.git
-    GIT_TAG        v1.5.2
-)
-FetchContent_MakeAvailable(opus)
-
-# libdatachannel (for WebRTC media channels)
-set(ENV{PKG_CONFIG_PATH} "/home/linuxbrew/.linuxbrew/lib/pkgconfig:$ENV{PKG_CONFIG_PATH}")
-list(PREPEND CMAKE_PREFIX_PATH "/home/linuxbrew/.linuxbrew")
-set(NO_WEBSOCKET ON CACHE BOOL "Disable WebSocket support" FORCE)
-set(NO_SUBMODULES OFF CACHE BOOL "Disable submodules" FORCE)
-set(USE_SYSTEM_JSON ON CACHE BOOL "Use system nlohmann-json" FORCE)
-set(USE_BOOST OFF CACHE BOOL "Use Boost" FORCE)
-set(USE_NICE ON CACHE BOOL "Use libnice for TURN-over-TLS support" FORCE)
-FetchContent_Declare(libdatachannel
-    GIT_REPOSITORY https://github.com/paullouisageneau/libdatachannel.git
-    GIT_TAG        v0.21.2
-)
-set(CMAKE_PROJECT_VERSION "2.5.0")
-set(CMAKE_POLICY_VERSION_MINIMUM "3.5")
-FetchContent_MakeAvailable(libdatachannel)
+# LiveKit C++ Client SDK (replaces manual libopus + libdatachannel WebRTC signaling)
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+if(LIVEKIT_LOCAL_SDK_DIR)
+    list(PREPEND CMAKE_PREFIX_PATH "${LIVEKIT_LOCAL_SDK_DIR}")
+else()
+    include(LiveKitSDK)
+    livekit_sdk_setup(
+        VERSION "1.13.1"
+        SDK_DIR "${CMAKE_BINARY_DIR}/_deps/livekit-sdk"
+        GITHUB_TOKEN "$ENV{GITHUB_TOKEN}"
+    )
+endif()
+find_package(LiveKit CONFIG REQUIRED)
 
 find_package(OpenSSL REQUIRED)
 
@@ -114,8 +103,7 @@ target_link_libraries(stoatpp PUBLIC
     OpenSSL::SSL
     OpenSSL::Crypto
     ${PULSE_LIBRARIES}
-    datachannel-static
-    opus
+    LiveKit::livekit
 )
 
 if(NOT STOATPP_USE_BOOST_BEAST)
