@@ -4,6 +4,9 @@
 #include <httplib.h>
 #include <chrono>
 #include <thread>
+#include <algorithm>
+#include <mutex>
+#include <vector>
 #include <iostream>
 #include <sstream>
 #include <iomanip>
@@ -65,41 +68,76 @@ static rest_client::Response perform_request(
         pre_hook(method, path, body);
     }
 
-    std::string bucket = method + ":" + path;
-    if (config.http_respect_ratelimits) {
-        int wait_time = ratelimiter.check(bucket);
-        if (wait_time > 0) {
-            utils::logger::log(LogLevel::WARNING, "Rate limit active for " + bucket + ". Sleeping for " + std::to_string(wait_time) + "ms", config);
-            std::this_thread::sleep_for(std::chrono::milliseconds(wait_time));
-        }
-    }
+    const std::string route_key = utils::ratelimiter::normalize_route(method, path);
 
-    struct ThreadHttpClient {
-        std::unique_ptr<httplib::Client> cli;
+    struct HttpClientPool {
+        std::mutex mtx;
+        std::vector<std::unique_ptr<httplib::Client>> idle;
         std::string base_url;
         int timeout_ms = 0;
 
-        httplib::Client& get(const ClientConfig& cfg) {
-            if (!cli || base_url != cfg.api_base_url || timeout_ms != cfg.http_timeout_ms) {
-                cli = std::make_unique<httplib::Client>(cfg.api_base_url);
-                cli->set_connection_timeout(std::chrono::milliseconds(cfg.http_timeout_ms));
-                cli->set_read_timeout(std::chrono::milliseconds(cfg.http_timeout_ms));
-                cli->set_keep_alive(true);
+        std::unique_ptr<httplib::Client> acquire(const ClientConfig& cfg) {
+            std::lock_guard<std::mutex> lock(mtx);
+            if (base_url != cfg.api_base_url || timeout_ms != cfg.http_timeout_ms) {
+                idle.clear();
                 base_url = cfg.api_base_url;
                 timeout_ms = cfg.http_timeout_ms;
             }
-            return *cli;
+            if (!idle.empty()) {
+                auto cli = std::move(idle.back());
+                idle.pop_back();
+                return cli;
+            }
+            auto cli = std::make_unique<httplib::Client>(cfg.api_base_url);
+            cli->set_connection_timeout(std::chrono::milliseconds(cfg.http_timeout_ms));
+            cli->set_read_timeout(std::chrono::milliseconds(cfg.http_timeout_ms));
+            cli->set_keep_alive(true);
+            cli->set_tcp_nodelay(true);
+            return cli;
         }
 
-        void reset() {
-            cli.reset();
+        void release(std::unique_ptr<httplib::Client> cli, const ClientConfig& cfg) {
+            if (!cli) return;
+            std::lock_guard<std::mutex> lock(mtx);
+            if (base_url == cfg.api_base_url && timeout_ms == cfg.http_timeout_ms && idle.size() < 16) {
+                idle.push_back(std::move(cli));
+            }
         }
     };
-    thread_local ThreadHttpClient tl_http;
+    static HttpClientPool http_pool;
+
+    struct PooledHttpClient {
+        HttpClientPool& pool;
+        const ClientConfig& cfg;
+        std::unique_ptr<httplib::Client> cli;
+
+        PooledHttpClient(HttpClientPool& p, const ClientConfig& c)
+            : pool(p), cfg(c), cli(p.acquire(c)) {}
+        ~PooledHttpClient() {
+            if (cli) pool.release(std::move(cli), cfg);
+        }
+        httplib::Client& get() {
+            if (!cli) cli = pool.acquire(cfg);
+            return *cli;
+        }
+        void reset() { cli.reset(); }
+    };
 
     int retries = 0;
+    int rl_retries = 0;
+    constexpr int max_rl_retries = 5;
     while (true) {
-        httplib::Client& cli = tl_http.get(config);
+        if (config.http_respect_ratelimits) {
+            while (true) {
+                int wait_time = ratelimiter.acquire(route_key);
+                if (wait_time <= 0) break;
+                utils::logger::log(LogLevel::DEBUG, "Rate limit active for " + route_key + ". Sleeping for " + std::to_string(wait_time) + "ms", config);
+                std::this_thread::sleep_for(std::chrono::milliseconds(wait_time));
+            }
+        }
+
+        PooledHttpClient pooled(http_pool, config);
+        httplib::Client& cli = pooled.get();
 
         httplib::Headers headers;
         if (config.token_type == TokenType::BOT) {
@@ -137,7 +175,7 @@ static rest_client::Response perform_request(
 
         if (!res) {
             auto err = res.error();
-            tl_http.reset();
+            pooled.reset();
             std::string err_msg = "Connection failed on " + method + " " + path + ": " + httplib::to_string(err);
             utils::logger::log(LogLevel::ERROR, err_msg, config);
             
@@ -164,7 +202,6 @@ static rest_client::Response perform_request(
         }
 
         std::string bucket_id = res->get_header_value("X-RateLimit-Bucket");
-        if (bucket_id.empty()) bucket_id = bucket;
 
         std::string limit_val = res->get_header_value("X-RateLimit-Limit");
         std::string remaining_val = res->get_header_value("X-RateLimit-Remaining");
@@ -175,9 +212,10 @@ static rest_client::Response perform_request(
                 int limit = std::stoi(limit_val);
                 int remaining = std::stoi(remaining_val);
                 int reset_after = std::stoi(reset_val);
-                
-                utils::logger::log(LogLevel::TRACE, "RateLimit Headers for Bucket " + bucket_id + ": Limit=" + limit_val + " Remaining=" + remaining_val + " Reset=" + reset_val + "ms", config);
-                ratelimiter.update(bucket_id, limit, remaining, reset_after);
+
+                const std::string& effective_bucket = bucket_id.empty() ? route_key : bucket_id;
+                utils::logger::log(LogLevel::TRACE, "RateLimit Headers for Bucket " + effective_bucket + ": Limit=" + limit_val + " Remaining=" + remaining_val + " Reset=" + reset_val + "ms", config);
+                ratelimiter.update(effective_bucket, limit, remaining, reset_after, route_key);
             } catch (...) {}
         }
 
@@ -188,10 +226,13 @@ static rest_client::Response perform_request(
             } else if (!reset_val.empty()) {
                 try { retry_after = std::stoi(reset_val); } catch (...) {}
             }
+            retry_after = std::max(50, retry_after) + 25;
 
-            utils::logger::log(LogLevel::WARNING, "Rate limited (429). Retrying in " + std::to_string(retry_after) + "ms", config);
-            
-            if (config.http_respect_ratelimits) {
+            ratelimiter.mark_limited(route_key, bucket_id, retry_after);
+            utils::logger::log(LogLevel::WARNING, "Rate limited (429) on " + route_key + ". Retrying in " + std::to_string(retry_after) + "ms", config);
+
+            if (config.http_respect_ratelimits && rl_retries < max_rl_retries) {
+                ++rl_retries;
                 std::this_thread::sleep_for(std::chrono::milliseconds(retry_after));
                 continue;
             } else {
@@ -421,7 +462,7 @@ std::string rest_client::upload_from_url(const std::string& image_url,
 }
 
 int rest_client::remaining_calls(const std::string& bucket) const {
-    return 10;
+    return ratelimiter_.remaining(bucket);
 }
 
 int rest_client::reset_after_ms(const std::string& bucket) const {

@@ -8,6 +8,8 @@
 #include <atomic>
 #include <chrono>
 #include <queue>
+#include <vector>
+#include <algorithm>
 
 namespace stoatpp {
 
@@ -21,12 +23,18 @@ struct gateway::impl {
     std::atomic<int64_t> latency_ms{0};
     models::User self_user;
 
-    // Background event worker queue
+    // Background event worker queue (control/heartbeat + persistent dispatch pool)
     std::queue<std::string> event_queue;
     std::mutex queue_mutex;
     std::condition_variable queue_cv;
     std::thread worker_thread;
     std::atomic<bool> worker_running{false};
+
+    std::queue<nlohmann::json> dispatch_queue;
+    std::mutex dispatch_mutex;
+    std::condition_variable dispatch_cv;
+    std::vector<std::thread> dispatch_pool;
+    std::atomic<bool> dispatch_running{false};
 
     // Reconnection watchdog
     std::thread watchdog_thread;
@@ -40,6 +48,33 @@ gateway::gateway(const std::string& token, const ClientConfig& config,
                  event_dispatcher& dispatcher)
     : token_(token), config_(config), dispatcher_(dispatcher), pimpl_(std::make_unique<impl>()) {
     
+    const int pool_size = std::max(4, config_.event_thread_count);
+    pimpl_->dispatch_running = true;
+    pimpl_->dispatch_pool.reserve(pool_size);
+    for (int i = 0; i < pool_size; ++i) {
+        pimpl_->dispatch_pool.emplace_back([this]() {
+            while (pimpl_->dispatch_running) {
+                nlohmann::json j;
+                {
+                    std::unique_lock<std::mutex> lock(pimpl_->dispatch_mutex);
+                    pimpl_->dispatch_cv.wait(lock, [this]() {
+                        return !pimpl_->dispatch_running || !pimpl_->dispatch_queue.empty();
+                    });
+                    if (!pimpl_->dispatch_running && pimpl_->dispatch_queue.empty()) {
+                        break;
+                    }
+                    j = std::move(pimpl_->dispatch_queue.front());
+                    pimpl_->dispatch_queue.pop();
+                }
+                try {
+                    handle_event(j);
+                } catch (const std::exception& e) {
+                    utils::logger::log(LogLevel::ERROR, "Event handler error: " + std::string(e.what()), config_);
+                }
+            }
+        });
+    }
+
     pimpl_->worker_running = true;
     pimpl_->worker_thread = std::thread([this]() {
         while (pimpl_->worker_running) {
@@ -63,16 +98,14 @@ gateway::gateway(const std::string& token, const ClientConfig& config,
                     type = j["type"].get<std::string>();
                 }
                 
-                if (type == "Ping" || type == "Pong" || type == "Authenticated" || type == "Ready") {
+                if (type == "Ping" || type == "Pong") {
                     handle_event(j);
                 } else {
-                    std::thread([this, j]() {
-                        try {
-                            handle_event(j);
-                        } catch (const std::exception& e) {
-                            utils::logger::log(LogLevel::ERROR, "Async event handler error: " + std::string(e.what()), config_);
-                        }
-                    }).detach();
+                    {
+                        std::lock_guard<std::mutex> lock(pimpl_->dispatch_mutex);
+                        pimpl_->dispatch_queue.push(std::move(j));
+                    }
+                    pimpl_->dispatch_cv.notify_one();
                 }
             } catch (const std::exception& e) {
                 utils::logger::log(LogLevel::ERROR, "Failed to parse WS payload: " + std::string(e.what()), config_);
@@ -106,6 +139,14 @@ gateway::~gateway() {
     pimpl_->queue_cv.notify_all();
     if (pimpl_->worker_thread.joinable()) {
         pimpl_->worker_thread.join();
+    }
+
+    pimpl_->dispatch_running = false;
+    pimpl_->dispatch_cv.notify_all();
+    for (auto& t : pimpl_->dispatch_pool) {
+        if (t.joinable()) {
+            t.join();
+        }
     }
 }
 
